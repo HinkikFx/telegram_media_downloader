@@ -190,9 +190,14 @@ async def _get_media_meta(
 
     file_name = None
     temp_file_name = None
-    dirname = validate_title(f"{chat_id}")
-    if message.chat and message.chat.title:
-        dirname = validate_title(f"{message.chat.title}")
+    # dirname = validate_title(f"{chat_id}")
+    # if message.chat and message.chat.title:
+    #     dirname = validate_title(f"{message.chat.title}")
+
+    # 修改文件夹命名方式
+    dirname = validate_title(f"{chat_id}")[4:]
+    if message.chat and message.chat.username:
+        dirname = validate_title(f"[{dirname}]{message.chat.username}")
 
     if message.date:
         datetime_dir_name = message.date.strftime(app.date_format)

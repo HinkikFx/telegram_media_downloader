@@ -370,7 +370,7 @@ class Application:
         self.app_data: dict = {}
         self.file_path_prefix: List[str] = ["chat_title", "media_datetime"]
         self.file_name_prefix: List[str] = ["message_id", "file_name"]
-        self.file_name_prefix_split: str = " - "
+        self.file_name_prefix_split: str = ""
         self.log_file_path = os.path.join(os.path.abspath("."), "log")
         self.session_file_path = os.path.join(os.path.abspath("."), "sessions")
         self.cloud_drive_config = CloudDriveConfig()
@@ -389,7 +389,7 @@ class Application:
         self.allowed_user_ids: yaml.comments.CommentedSeq = yaml.comments.CommentedSeq(
             []
         )
-        self.date_format: str = "%Y_%m"
+        self.date_format: str = "%Y-%m"
         self.drop_no_audio_video: bool = False
 
         self.forward_limit_call = LimitCall(max_limit_call_times=33)
@@ -689,6 +689,9 @@ class Application:
                 res = os.path.join(res, media_type)
         return res
 
+        # update by mouxmoux
+        # 修改保存文件夹路径
+
     def get_file_name(
         self, message_id: int, file_name: Optional[str], caption: Optional[str]
     ) -> str:
@@ -716,7 +719,7 @@ class Application:
             if prefix == "message_id":
                 if res != "":
                     res += self.file_name_prefix_split
-                res += f"{message_id}"
+                res += f"[{message_id}]"
             elif prefix == "file_name" and file_name:
                 if res != "":
                     res += self.file_name_prefix_split
