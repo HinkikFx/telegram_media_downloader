@@ -433,7 +433,7 @@ async def download_media(
                 # 增加查询数据库内文件是否重复的功能
                 if downloadedDB.is_exist_by_ids(chat_id_deal, message.id):
                     logger.info(
-                        f"chat_id={chat_id_deal} id={message.id} {media_dict.get('filename')} "
+                        f"[{media_dict.get('chat_username')}]chat_id={chat_id_deal} id={message.id} {media_dict.get('filename')} "
                         f"{_t('already download,download skipped')}.\n"
                     )
                     return DownloadStatus.SkipDownload, None
@@ -441,7 +441,7 @@ async def download_media(
                 # 增加高级查询    数据库内文件类型相同 文件名一致 大小相同 则姑且认为是重复的
                 if downloadedDB.is_exist_by_filename(media_dict.get('mime_type'), media_dict.get('media_size'), media_dict.get('filename'), media_dict.get('title')):
                     logger.info(
-                        f"filename={media_dict.get('filename')} filesize={media_dict.get('media_size')} filetype={media_dict.get('mime_type')} "
+                        f"[{media_dict.get('chat_username')}]filename={media_dict.get('filename')} filesize={media_dict.get('media_size')} filetype={media_dict.get('mime_type')} "
                         f"{_t('already download,download skipped')}.\n"
                     )
                     return DownloadStatus.SkipDownload, None
@@ -451,13 +451,13 @@ async def download_media(
                     file_size = os.path.getsize(file_name)
                     if file_size or file_size == media_size:
                         logger.info(
-                            f"id={message.id} {ui_file_name} "
+                            f"[{media_dict.get('chat_username')}]id={message.id} {ui_file_name} "
                             f"{_t('already download,download skipped')}.\n"
                         )
                         # 增加数据库内无记录但目录内存在文件时补写数据库操作
                         downloadedDB.addto_localDB(media_dict)
                         logger.info(
-                            f"id={message.id} {ui_file_name} "
+                            f"[{media_dict.get('chat_username')}]id={message.id} {ui_file_name} "
                             f"{_t('already download,but not in db. insert into db')}.\n"
                         )
                         return DownloadStatus.SkipDownload, None
