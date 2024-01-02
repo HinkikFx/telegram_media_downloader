@@ -33,6 +33,10 @@ class BaseFilter:
         """Reset all symbol"""
         self.names.clear()
 
+    def language_check(self, filter_str: str):
+        return
+
+
     def exec(self, filter_str: str) -> Any:
         """Exec filter str"""
         # )  #
@@ -350,16 +354,35 @@ class Filter:
         self.filter.reset()
         self.filter.names = meta_data.data()
 
+    def has_japanese_or_korean_chars(self, a: str) -> bool:
+        # Match any character in the Unicode block for Japanese or Korean characters
+        return bool(re.search(r'[\u3040-\u30ff\uac00-\ud7a3]', a))
+
+
     def set_debug(self, debug: bool):
         """Set Filter Debug Model"""
         self.filter.debug = debug
 
     def exec(self, filter_str: str) -> bool:
         """Exec filter str"""
+        no_jap_kor = False
+        if 'no_jap_kor' in filter_str:
+            no_jap_kor = True
+            filter_str = filter_str.replace('no_jap_kor', '').strip()
 
         if self.filter.names:
             res = self.filter.exec(filter_str)
             if isinstance(res, bool):
+                if res == True:
+                    if no_jap_kor and (self.filter.names.get('media_type') == 'audio' or self.filter.names.get('media_type') == 'vedio'):
+                        # 音频或视频是日语或韩语时 filter里有no_jap_kor标识的 则不下载文件。
+                        if self.has_japanese_or_korean_chars(self.filter.names.get('media_file_name')):
+                            print(f"{self.filter.names.get('media_file_name')} is jap or kor! passed")
+                            return False
+                        else:
+                            if self.has_japanese_or_korean_chars(self.filter.names.get('message_caption')):
+                                print(f"{self.filter.names.get('message_caption')} is jap or kor! passed")
+                                return False
                 return res
             return False
         raise ValueError("meta data cannot be empty!")

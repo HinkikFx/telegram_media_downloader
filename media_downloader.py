@@ -33,6 +33,8 @@ from utils.meta import print_meta
 from utils.meta_data import MetaData
 from utils.updates import check_for_updates
 
+import sqlmodel
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -44,6 +46,8 @@ CONFIG_NAME = "config.yaml"
 DATA_FILE_NAME = "data.yaml"
 APPLICATION_NAME = "media_downloader"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
+
+downloadedDB = sqlmodel.Downloaded()
 
 queue: asyncio.Queue = asyncio.Queue()
 RETRY_TIME_OUT = 3
@@ -162,12 +166,13 @@ def _is_exist(file_path: str) -> bool:
 # pylint: disable = R0912
 
 
+
 async def _get_media_meta(
     chat_id: Union[int, str],
     message: pyrogram.types.Message,
     media_obj: Union[Audio, Document, Photo, Video, VideoNote, Voice],
     _type: str,
-) -> Tuple[str, str, Optional[str]]:
+) -> dict:
     """Extract file name and file id from media object.
 
     Parameters
@@ -190,19 +195,19 @@ async def _get_media_meta(
 
     file_name = None
     temp_file_name = None
-    # dirname = validate_title(f"{chat_id}")
-    # if message.chat and message.chat.title:
-    #     dirname = validate_title(f"{message.chat.title}")
 
     # 修改文件夹命名方式
-    dirname = validate_title(f"{chat_id}")[4:]
     if message.chat and message.chat.username:
+        chat_id_deal = 0 - message.chat.id - 1000000000000
+        dirname = validate_title(f"{chat_id_deal}")
         dirname = validate_title(f"[{dirname}]{message.chat.username}")
 
     if message.date:
         datetime_dir_name = message.date.strftime(app.date_format)
+        media_addtime = message.date.strftime("%Y-%m-%d %H:%M")
     else:
         datetime_dir_name = "0"
+        media_addtime = ''
 
     if _type in ["voice", "video_note"]:
         # pylint: disable = C0209
@@ -245,6 +250,8 @@ async def _get_media_meta(
         if not file_name and message.photo:
             file_name = f"{message.photo.file_unique_id}"
 
+        file_name_no_path = file_name + file_name_suffix
+
         gen_file_name = (
             app.get_file_name(message.id, file_name, caption) + file_name_suffix
         )
@@ -254,7 +261,45 @@ async def _get_media_meta(
         temp_file_name = os.path.join(app.temp_save_path, dirname, gen_file_name)
 
         file_name = os.path.join(file_save_path, gen_file_name)
-    return truncate_filename(file_name), truncate_filename(temp_file_name), file_format
+
+        if message.audio and message.audio != '':
+            media_title = message.audio.title
+            media_duration = message.audio.duration
+            media_size = message.audio.file_size
+        elif message.video and message.video != '':
+            media_title = caption
+            media_duration = message.video.duration
+            media_size = message.video.file_size
+        elif message.photo and message.photo != '':
+            media_title = caption
+            media_duration = 0
+            media_size = message.photo.file_size
+        elif message.document and message.document != '':
+            media_size =  message.document.file_size
+            media_title = file_name_no_path.removesuffix(file_name_suffix)
+            media_duration = 0
+        else:
+            media_duration = 0
+            media_size = 0
+            media_title = file_name_no_path.removesuffix(file_name_suffix)
+
+        media_dict = {
+            'chat_id': chat_id_deal,
+            'message_id': message.id,
+            'filename': file_name_no_path,
+            'caption': caption,
+            'title': validate_title(media_title),
+            'mime_type': file_name_suffix[1:],
+            'media_size': media_size,
+            'media_duration': media_duration,
+            'media_addtime': media_addtime,
+            'chat_username': message.chat.username,
+            'chat_title': validate_title(message.chat.title),
+            'file_fullname':truncate_filename(file_name),
+            'temp_file_fullname':truncate_filename(temp_file_name),
+            'file_format':file_format
+        }
+    return media_dict
 
 
 async def add_download_task(
@@ -368,16 +413,40 @@ async def download_media(
             _media = getattr(message, _type, None)
             if _media is None:
                 continue
-            file_name, temp_file_name, file_format = await _get_media_meta(
+            media_dict =  await _get_media_meta(
                 node.chat_id, message, _media, _type
             )
+
+            file_name = media_dict.get('file_fullname')
+            temp_file_name = media_dict.get('temp_file_fullname')
+            file_format = media_dict.get('file_format')
+            chat_id_deal = media_dict.get('chat_id')
             media_size = getattr(_media, "file_size", 0)
+
 
             ui_file_name = file_name
             if app.hide_file_name:
                 ui_file_name = f"****{os.path.splitext(file_name)[-1]}"
 
             if _can_download(_type, file_formats, file_format):
+
+                # 增加查询数据库内文件是否重复的功能
+                if downloadedDB.is_exist_by_ids(chat_id_deal, message.id):
+                    logger.info(
+                        f"chat_id={chat_id_deal} id={message.id} {media_dict.get('filename')} "
+                        f"{_t('already download,download skipped')}.\n"
+                    )
+                    return DownloadStatus.SkipDownload, None
+
+                # 增加高级查询    数据库内文件类型相同 文件名一致 大小相同 则姑且认为是重复的
+                if downloadedDB.is_exist_by_filename(media_dict.get('mime_type'), media_dict.get('media_size'), media_dict.get('filename'), media_dict.get('title')):
+                    logger.info(
+                        f"filename={media_dict.get('filename')} filesize={media_dict.get('media_size')} filetype={media_dict.get('mime_type')} "
+                        f"{_t('already download,download skipped')}.\n"
+                    )
+                    return DownloadStatus.SkipDownload, None
+
+
                 if _is_exist(file_name):
                     file_size = os.path.getsize(file_name)
                     if file_size or file_size == media_size:
@@ -385,7 +454,12 @@ async def download_media(
                             f"id={message.id} {ui_file_name} "
                             f"{_t('already download,download skipped')}.\n"
                         )
-
+                        # 增加数据库内无记录但目录内存在文件时补写数据库操作
+                        downloadedDB.addto_localDB(media_dict)
+                        logger.info(
+                            f"id={message.id} {ui_file_name} "
+                            f"{_t('already download,but not in db. insert into db')}.\n"
+                        )
                         return DownloadStatus.SkipDownload, None
             else:
                 return DownloadStatus.SkipDownload, None
@@ -423,6 +497,8 @@ async def download_media(
                 await asyncio.sleep(0.5)
                 _move_to_download_path(temp_download_path, file_name)
                 # TODO: if not exist file size or media
+                # 增加将已下载文件信息写入数据库内记录功能
+                downloadedDB.addto_localDB(media_dict)
                 return DownloadStatus.SuccessDownload, file_name
         except pyrogram.errors.exceptions.bad_request_400.BadRequest:
             logger.warning(
@@ -651,15 +727,15 @@ def main():
         for task in tasks:
             task.cancel()
         logger.info(_t("Stopped!"))
-        check_for_updates(app.proxy)
-        logger.info(f"{_t('update config')}......")
-        app.update_config()
-        logger.success(
-            f"{_t('Updated last read message_id to config file')},"
-            f"{_t('total download')} {app.total_download_task}, "
-            f"{_t('total upload file')} "
-            f"{app.cloud_drive_config.total_upload_success_file_count}"
-        )
+        #check_for_updates(app.proxy)
+        #logger.info(f"{_t('update config')}......")
+        #app.update_config()
+        # logger.success(
+        #     f"{_t('Updated last read message_id to config file')},"
+        #     f"{_t('total download')} {app.total_download_task}, "
+        #     f"{_t('total upload file')} "
+        #     f"{app.cloud_drive_config.total_upload_success_file_count}"
+        # )
 
 
 if __name__ == "__main__":

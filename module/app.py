@@ -436,6 +436,9 @@ class Application:
             self.file_path_prefix = _config["file_path_prefix"]
         if _config.get("file_name_prefix"):
             self.file_name_prefix = _config["file_name_prefix"]
+        if _config.get("temp_save_path"):
+            self.temp_save_path = _config["temp_save_path"]
+
 
         if _config.get("upload_drive"):
             upload_drive_config = _config["upload_drive"]
@@ -540,17 +543,9 @@ class Application:
             for item in chat:
                 if "chat_id" in item:
                     self.chat_download_config[item["chat_id"]] = ChatDownloadConfig()
-                    self.chat_download_config[
-                        item["chat_id"]
-                    ].last_read_message_id = item.get("last_read_message_id", 0)
-                    self.chat_download_config[
-                        item["chat_id"]
-                    ].download_filter = item.get("download_filter", "")
-                    self.chat_download_config[
-                        item["chat_id"]
-                    ].upload_telegram_chat_id = item.get(
-                        "upload_telegram_chat_id", None
-                    )
+                    self.chat_download_config[item["chat_id"]].last_read_message_id = item.get("last_read_message_id", 0)
+                    self.chat_download_config[item["chat_id"]].download_filter = item.get("download_filter", "")
+                    self.chat_download_config[item["chat_id"]].upload_telegram_chat_id = item.get("upload_telegram_chat_id", None)
         elif _config.get("chat_id"):
             # Compatible with lower versions
             self._chat_id = _config["chat_id"]
