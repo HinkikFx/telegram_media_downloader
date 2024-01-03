@@ -380,11 +380,11 @@ class Filter:
                     if no_jap_kor and (self.filter.names.get('media_type') == 'audio' or self.filter.names.get('media_type') == 'video'):
                         # 音频或视频是日语或韩语时 filter里有no_jap_kor标识的 则不下载文件。
                         if self.has_japanese_or_korean_chars(self.filter.names.get('media_file_name')):
-                            logger.info(f"{self.filter.names.get('media_file_name')} is jap or kor! passed. \n")
+                            logger.info(f"{self.filter.names.get('media_file_name')} is jap or kor! passed. \n",exc_info=True,)
                             return False
                         else:
                             if self.has_japanese_or_korean_chars(self.filter.names.get('message_caption')):
-                                logger.info(f"{self.filter.names.get('message_caption')} is jap or kor! passed. \n")
+                                logger.info(f"{self.filter.names.get('message_caption')} is jap or kor! passed. \n",exc_info=True,)
                                 return False
                 return res
             return False

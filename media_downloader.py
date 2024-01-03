@@ -283,22 +283,34 @@ async def _get_media_meta(
             media_size = 0
             media_title = file_name_no_path.removesuffix(file_name_suffix)
 
-        media_dict = {
-            'chat_id': chat_id_deal,
-            'message_id': message.id,
-            'filename': file_name_no_path,
-            'caption': caption,
-            'title': validate_title(media_title),
-            'mime_type': file_name_suffix[1:],
-            'media_size': media_size,
-            'media_duration': media_duration,
-            'media_addtime': media_addtime,
-            'chat_username': message.chat.username,
-            'chat_title': validate_title(message.chat.title),
-            'file_fullname':truncate_filename(file_name),
-            'temp_file_fullname':truncate_filename(temp_file_name),
-            'file_format':file_format
-        }
+        if not media_title:
+            media_title = ''
+        if not message.chat.title:
+            message.chat.title = ''
+        try:
+            media_dict = {
+                'chat_id': chat_id_deal,
+                'message_id': message.id,
+                'filename': file_name_no_path,
+                'caption': caption,
+                'title': validate_title(media_title),
+                'mime_type': file_name_suffix[1:],
+                'media_size': media_size,
+                'media_duration': media_duration,
+                'media_addtime': media_addtime,
+                'chat_username': message.chat.username,
+                'chat_title': validate_title(message.chat.title),
+                'file_fullname':truncate_filename(file_name),
+                'temp_file_fullname':truncate_filename(temp_file_name),
+                'file_format':file_format
+            }
+        except Exception as e:
+            logger.error(
+                f"Message[{message.id}]: "
+                f"{_t('some info is missed')}:\n[{e}].",
+                exc_info=True,
+            )
+
     return media_dict
 
 
@@ -434,7 +446,8 @@ async def download_media(
                 if downloadedDB.is_exist_by_ids(chat_id_deal, message.id):
                     logger.info(
                         f"[{media_dict.get('chat_username')}]chat_id={chat_id_deal} id={message.id} {media_dict.get('filename')} "
-                        f"{_t('already download,download skipped')}.\n"
+                        f"{_t('already download,download skipped')}.\n",
+                        exc_info=True,
                     )
                     return DownloadStatus.SkipDownload, None
 
@@ -442,7 +455,8 @@ async def download_media(
                 if downloadedDB.is_exist_by_filename(media_dict.get('mime_type'), media_dict.get('media_size'), media_dict.get('filename'), media_dict.get('title')):
                     logger.info(
                         f"[{media_dict.get('chat_username')}]filename={media_dict.get('filename')} filesize={media_dict.get('media_size')} filetype={media_dict.get('mime_type')} "
-                        f"{_t('already download,download skipped')}.\n"
+                        f"{_t('already download,download skipped')}.\n",
+                        exc_info=True,
                     )
                     return DownloadStatus.SkipDownload, None
 
@@ -452,13 +466,15 @@ async def download_media(
                     if file_size or file_size == media_size:
                         logger.info(
                             f"[{media_dict.get('chat_username')}]id={message.id} {ui_file_name} "
-                            f"{_t('already download,download skipped')}.\n"
+                            f"{_t('already download,download skipped')}.\n",
+                            exc_info=True,
                         )
                         # 增加数据库内无记录但目录内存在文件时补写数据库操作
                         downloadedDB.addto_localDB(media_dict)
                         logger.info(
                             f"[{media_dict.get('chat_username')}]id={message.id} {ui_file_name} "
-                            f"{_t('already download,but not in db. insert into db')}.\n"
+                            f"{_t('already download,but not in db. insert into db')}.\n",
+                            exc_info=True,
                         )
                         return DownloadStatus.SkipDownload, None
             else:
