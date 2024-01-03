@@ -80,4 +80,4 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           cd dist
-          ./telegram_media_downloader
+          ./media_downloader
