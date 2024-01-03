@@ -46,7 +46,7 @@ jobs:
           pyinstaller \
             --onefile media_downloader.py \
             --python-option u \
-            --add-data "config.ini:." \
+            --add-data "config.yaml:." \
 
       - name: Build with PyInstaller for windows
         if: matrix.os == 'windows-latest'
@@ -54,7 +54,7 @@ jobs:
           pyinstaller `
             --onefile media_downloader.py `
             --python-option u `
-            --add-data "config.ini;." `
+            --add-data "config.yaml;." `
 
       - name: Copy config.ini
         run: |
