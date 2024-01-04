@@ -59,6 +59,8 @@ jobs:
       - name: Copy config.yaml
         run: |
           cp config.yaml dist/
+          cp downloaded.db dist/
+          cp data.yaml dist/
 
       - name: Set VERSION variable for macos/ubuntu
         if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
