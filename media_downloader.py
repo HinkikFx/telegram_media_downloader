@@ -745,13 +745,13 @@ def main():
         logger.info(_t("Stopped!"))
         #check_for_updates(app.proxy)
         #logger.info(f"{_t('update config')}......")
-        #app.update_config()
-        # logger.success(
-        #     f"{_t('Updated last read message_id to config file')},"
-        #     f"{_t('total download')} {app.total_download_task}, "
-        #     f"{_t('total upload file')} "
-        #     f"{app.cloud_drive_config.total_upload_success_file_count}"
-        # )
+        app.update_config()
+        logger.success(
+             f"{_t('Updated last read message_id to config file')},"
+             f"{_t('total download')} {app.total_download_task}, "
+             f"{_t('total upload file')} "
+             f"{app.cloud_drive_config.total_upload_success_file_count}"
+        )
 
 
 if __name__ == "__main__":
