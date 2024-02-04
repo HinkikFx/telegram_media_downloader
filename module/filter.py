@@ -358,7 +358,7 @@ class Filter:
 
     def has_japanese_or_korean_chars(self, a: str) -> bool:
         # Match any character in the Unicode block for Japanese or Korean characters
-        result = bool(re.search(r'[\u3040-\u30ff\uac00-\ud7a3]', a) or re.search(r'(日南|真琴|天知遥|秋水|养猪妹|利香|幽灵妹|柚木)', a))
+        result = bool(re.search(r'[\u3040-\u30ff\uac00-\ud7a3]', a.replace('の', '的')) or re.search(r'(日南|真琴|天知遥|秋水|养猪妹|利香|幽灵妹|柚木)', a))
         return result
 
 

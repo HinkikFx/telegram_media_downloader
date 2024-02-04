@@ -116,6 +116,17 @@ class Downloaded(BaseModel):
             db.close()
             return False
 
+    def max_by_ids(self, chat_id :int):
+        max_id = 1
+        try:
+            db.connect()
+            max_id = Downloaded.select(fn.Max(Downloaded.message_id)).scalar()
+        except:
+            print ('no data')
+        finally:
+            db.close()
+        return max_id
+
 class SqliteSequence(BaseModel):
     name = BareField(null=True)
     seq = BareField(null=True)

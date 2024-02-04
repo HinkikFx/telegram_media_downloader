@@ -1,8 +1,10 @@
-api_hash: your_api_hash
-api_id: your_api_id
+api_hash: 8b71c214b961905539c966b866bb4499
+api_id: 27545157
+bot_token: 5598238561:AAFKnE3bxT5IgknfVyVCsdfxxkW1CJDw-nA
 chat:
-- chat_id: telegram_chat_id
-  last_read_message_id: 0
+- chat_id: Hxiaowen
+  last_read_message_id: 1
+  download_filter: file_extension == '.txt'
 file_formats:
   audio:
   - all
@@ -13,6 +15,10 @@ file_formats:
 file_path_prefix:
 - chat_title
 - media_datetime
+upload_drive:
+  enable_upload_file: false
+  remote_dir: moux-docu:/telegram
+  rclone_path: /usr/bin/rclone
 media_types:
 - audio
 - photo
@@ -22,3 +28,18 @@ media_types:
 - video_note
 # in linux please use /
 # save_path: E:\github\telegram_media_downloader
+save_path: /Users/wuyun/Downloads/alist/telegram
+temp_save_path: /Users/wuyun/Downloads/Other/Telegram/temp
+file_name_prefix:
+- message_id
+- file_name
+max_download_task: 1
+allowed_user_ids:
+- me
+- '@Mouxwu'
+- '@bwuyun'
+proxy:
+  hostname: 127.0.0.1
+  port: 62808
+  scheme: socks5
+language: ZH

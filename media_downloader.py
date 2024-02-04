@@ -614,14 +614,15 @@ async def download_chat_task(
 
     chat_download_config.node = node
 
-    if chat_download_config.ids_to_retry:
-        logger.info(f"{_t('Downloading files failed during last run')}...")
-        skipped_messages: list = await client.get_messages(  # type: ignore
-            chat_id=node.chat_id, message_ids=chat_download_config.ids_to_retry
-        )
-
-        for message in skipped_messages:
-            await add_download_task(message, node)
+    # ids_to_retry 有bug 暂时取消
+    # if chat_download_config.ids_to_retry:
+    #     logger.info(f"{_t('Downloading files failed during last run')}...")
+    #     skipped_messages: list = await client.get_messages(  # type: ignore
+    #         chat_id=node.chat_id, message_ids=chat_download_config.ids_to_retry
+    #     )
+    #
+    #     for message in skipped_messages:
+    #         await add_download_task(message, node)
 
     async for message in messages_iter:  # type: ignore
         meta_data = MetaData()

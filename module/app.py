@@ -782,21 +782,23 @@ class Application:
             ]
         idx = 0
         # pylint: disable = R1733
+
         for key, value in self.chat_download_config.items():
             # pylint: disable = W0201
-            unfinished_ids = set(value.ids_to_retry)
+            # ids_to_retry 有bug 暂时取消
+            # unfinished_ids = set(value.ids_to_retry)
 
-            for it in value.ids_to_retry:
-                if DownloadStatus.SuccessDownload == value.node.download_status.get(
-                    it, DownloadStatus.FailedDownload
-                ):
-                    unfinished_ids.remove(it)
+            # for it in value.ids_to_retry:
+            #     if DownloadStatus.SuccessDownload == value.node.download_status.get(
+            #         it, DownloadStatus.FailedDownload
+            #     ):
+            #         unfinished_ids.remove(it)
+            #
+            # for _idx, _value in value.node.download_status.items():
+            #     if DownloadStatus.SuccessDownload != _value:
+            #         unfinished_ids.add(_idx)
 
-            for _idx, _value in value.node.download_status.items():
-                if DownloadStatus.SuccessDownload != _value:
-                    unfinished_ids.add(_idx)
-
-            self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
+            #self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
 
             if idx >= len(self.app_data["chat"]):
                 self.app_data["chat"].append({})
