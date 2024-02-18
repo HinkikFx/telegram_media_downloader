@@ -200,7 +200,7 @@ async def _get_media_meta(
     if message.chat and message.chat.username:
         chat_id_deal = 0 - message.chat.id - 1000000000000
         dirname = validate_title(f"{chat_id_deal}")
-        dirname = validate_title(f"[{dirname}]{message.chat.username}")
+        dirname = validate_title(f"[{dirname}]{message.chat.username}{message.id}")
 
     if message.date:
         datetime_dir_name = message.date.strftime(app.date_format)
@@ -213,6 +213,7 @@ async def _get_media_meta(
         # pylint: disable = C0209
         file_format = media_obj.mime_type.split("/")[-1]  # type: ignore
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
+        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100))
         file_name = "{} - {}_{}.{}".format(
             message.id,
             _type,
@@ -220,7 +221,7 @@ async def _get_media_meta(
             file_format,
         )
         file_name = validate_title(file_name)
-        temp_file_name = os.path.join(app.temp_save_path, dirname, file_name)
+        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100), file_name)
 
         file_name = os.path.join(file_save_path, file_name)
     else:
@@ -257,8 +258,8 @@ async def _get_media_meta(
         )
 
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-
-        temp_file_name = os.path.join(app.temp_save_path, dirname, gen_file_name)
+        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100))
+        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100), gen_file_name)
 
         file_name = os.path.join(file_save_path, gen_file_name)
 
