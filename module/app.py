@@ -837,9 +837,10 @@ class Application:
             with open(self.config_file, "w", encoding="utf-8") as yaml_file:
                 _yaml.dump(self.config, yaml_file)
 
-        if immediate:
-            with open(self.app_data_file, "w", encoding="utf-8") as yaml_file:
-                _yaml.dump(self.app_data, yaml_file)
+        # 不再写入data.yaml文件
+        #if immediate:
+        #    with open(self.app_data_file, "w", encoding="utf-8") as yaml_file:
+        #        _yaml.dump(self.app_data, yaml_file)
 
     def set_language(self, language: Language):
         """Set Language"""

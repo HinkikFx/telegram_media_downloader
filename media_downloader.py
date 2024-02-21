@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import time
+import datetime
 from typing import List, Optional, Tuple, Union
 
 import pyrogram
@@ -200,7 +201,7 @@ async def _get_media_meta(
     if message.chat and message.chat.username:
         chat_id_deal = 0 - message.chat.id - 1000000000000
         dirname = validate_title(f"{chat_id_deal}")
-        dirname = validate_title(f"[{dirname}]{message.chat.username}{message.id}")
+        dirname = validate_title(f"[{dirname}]{message.chat.username}")
 
     if message.date:
         datetime_dir_name = message.date.strftime(app.date_format)
@@ -258,8 +259,8 @@ async def _get_media_meta(
         )
 
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100))
-        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100), gen_file_name)
+        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100).zfill(6))
+        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100).zfill(6), gen_file_name)
 
         file_name = os.path.join(file_save_path, gen_file_name)
 
