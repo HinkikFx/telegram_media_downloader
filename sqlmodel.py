@@ -1,7 +1,30 @@
 from peewee import *
 from datetime import datetime
+import re,difflib
 
 db = SqliteDatabase('./downloaded.db')
+
+
+def process_string(a):
+    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
+    if bool(pattern.search(a)):
+        # 去掉开头的非汉字字符
+        a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
+    else:
+        # 去掉开头的非英文字符
+        a = re.sub(r'^[^a-zA-Z]+', '', a)
+    # 去掉所有标点符号和特殊字符
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
+    b = re.sub(r_str, "_", a)
+    return b
+
+def string_similar(s1, s2):
+    if s1 == '' or s2 == '':
+        return 0
+    s1 = process_string(s1)
+    s2 = process_string(s2)
+    similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
+    return similar
 
 class UnknownField(object):
     def __init__(self, *_, **__): pass
@@ -102,19 +125,31 @@ class Downloaded(BaseModel):
             db.close()
             return False
 
-    def is_exist_by_filename(self, mime_type :str, media_size :int, filename :str, title: str):
+
+
+    def exist_filename_similar(self, mime_type :str, media_size :int, filename :str, title: str):
         try:
+            similar = 0
             db.connect()
-            downloaded = Downloaded.get(mime_type = mime_type, media_size = media_size, status=1)
-            if downloaded and (downloaded.filename == filename or downloaded.title == title):
-                db.close()
-                return True
-            else:
-                db.close()
-                return False
+            downloaded = Downloaded.select().where(Downloaded.mime_type == mime_type, Downloaded.media_size == media_size, Downloaded.status==1)
+            filename = filename.split(".")[0]
+            for record in downloaded:
+                print (record.filename)
+                filename_db = record.filename.split(".")[0]
+                title_db = record.title
+                for namea in [filename_db, title_db]:
+                    for nameb in [filename, title]:
+                        sim_num = string_similar(namea, nameb)
+                        if sim_num == 1.0:
+                            return 1.0
+                        if similar < sim_num:
+                            similar = sim_num
+            db.close()
+            return similar
         except:
             db.close()
             return False
+
 
     def max_by_ids(self, chat_id :int):
         max_id = 1

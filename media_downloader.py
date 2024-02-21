@@ -53,6 +53,8 @@ downloadedDB = sqlmodel.Downloaded()
 queue: asyncio.Queue = asyncio.Queue()
 RETRY_TIME_OUT = 3
 
+similar_set = 0.92
+
 logging.getLogger("pyrogram.session.session").addFilter(LogFilter())
 logging.getLogger("pyrogram.client").addFilter(LogFilter())
 
@@ -454,9 +456,11 @@ async def download_media(
                     return DownloadStatus.SkipDownload, None
 
                 # 增加高级查询    数据库内文件类型相同 文件名一致 大小相同 则姑且认为是重复的
-                if downloadedDB.is_exist_by_filename(media_dict.get('mime_type'), media_dict.get('media_size'), media_dict.get('filename'), media_dict.get('title')):
+                similar_num = downloadedDB.exist_filename_similar(media_dict.get('mime_type'), media_dict.get('media_size'),
+                                                    media_dict.get('filename'), media_dict.get('title'))
+                if similar_num >= similar_set:
                     logger.info(
-                        f"[{media_dict.get('chat_username')}]filename={media_dict.get('filename')} filesize={media_dict.get('media_size')} filetype={media_dict.get('mime_type')} "
+                        f"[{media_dict.get('chat_username')}]filename={media_dict.get('filename')} similar={similar_num} "
                         f"{_t('already download,download skipped')}.\n",
                         exc_info=True,
                     )
