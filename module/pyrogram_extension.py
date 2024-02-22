@@ -159,6 +159,8 @@ def get_extension(file_id: str, mime_type: str, dot: bool = True) -> str:
 
     if dot:
         extension = "." + extension
+    if extension.startswith('.'):
+        extension = extension[1:]
     return extension
 
 

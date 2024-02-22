@@ -196,14 +196,24 @@ async def _get_media_meta(
     else:
         file_format = None
 
-    file_name = None
-    temp_file_name = None
+    file_name = ''
+    temp_file_name = ''
 
     # 修改文件夹命名方式
-    if message.chat and message.chat.username:
-        chat_id_deal = 0 - message.chat.id - 1000000000000
-        dirname = validate_title(f"{chat_id_deal}")
-        dirname = validate_title(f"[{dirname}]{message.chat.username}")
+    if message.forward_from_chat and message.forward_from_chat.id:
+        real_chat_id = message.forward_from_chat.id
+        real_chat_username = message.forward_from_chat.username
+        real_message_id = message.forward_from_message_id
+        real_chat_title = message.forward_from_chat.title
+    else:
+        real_chat_id = message.chat.id
+        real_chat_username = message.chat.username
+        real_message_id = message.id
+        real_chat_title = message.chat.title
+
+    chat_id_deal = 0 - real_chat_id - 1000000000000
+    dirname = validate_title(f"{chat_id_deal}")
+    dirname = validate_title(f"[{dirname}]{real_chat_username}")
 
     if message.date:
         datetime_dir_name = message.date.strftime(app.date_format)
@@ -216,15 +226,15 @@ async def _get_media_meta(
         # pylint: disable = C0209
         file_format = media_obj.mime_type.split("/")[-1]  # type: ignore
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100))
+        file_save_path = os.path.join(file_save_path, str(int(real_message_id) // 100 * 100))
         file_name = "{} - {}_{}.{}".format(
-            message.id,
+            real_message_id,
             _type,
             media_obj.date.isoformat(),  # type: ignore
             file_format,
         )
         file_name = validate_title(file_name)
-        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100), file_name)
+        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(real_message_id) // 100 * 100), file_name)
 
         file_name = os.path.join(file_save_path, file_name)
     else:
@@ -247,22 +257,22 @@ async def _get_media_meta(
 
         if caption:
             caption = validate_title(caption)
-            app.set_caption_name(chat_id, message.media_group_id, caption)
+            app.set_caption_name(real_chat_id, message.media_group_id, caption)
         else:
-            caption = app.get_caption_name(chat_id, message.media_group_id)
+            caption = app.get_caption_name(real_chat_id, message.media_group_id)
 
-        if not file_name and message.photo:
-            file_name = f"{message.photo.file_unique_id}"
+        if not file_name:
+            file_name = caption
 
         file_name_no_path = file_name + file_name_suffix
 
         gen_file_name = (
-            app.get_file_name(message.id, file_name, caption) + file_name_suffix
+            app.get_file_name(real_message_id, file_name, caption) + file_name_suffix
         )
 
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-        file_save_path = os.path.join(file_save_path, str(int(message.id) // 100 * 100).zfill(6))
-        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(message.id) // 100 * 100).zfill(6), gen_file_name)
+        file_save_path = os.path.join(file_save_path, str(int(real_message_id) // 100 * 100).zfill(6))
+        temp_file_name = os.path.join(app.temp_save_path, dirname, str(int(real_message_id) // 100 * 100).zfill(6), gen_file_name)
 
         file_name = os.path.join(file_save_path, gen_file_name)
 
@@ -289,12 +299,12 @@ async def _get_media_meta(
 
         if not media_title:
             media_title = ''
-        if not message.chat.title:
-            message.chat.title = ''
+        if not real_chat_title:
+            real_chat_title = ''
         try:
             media_dict = {
                 'chat_id': chat_id_deal,
-                'message_id': message.id,
+                'message_id': real_message_id,
                 'filename': file_name_no_path,
                 'caption': caption,
                 'title': validate_title(media_title),
@@ -302,8 +312,8 @@ async def _get_media_meta(
                 'media_size': media_size,
                 'media_duration': media_duration,
                 'media_addtime': media_addtime,
-                'chat_username': message.chat.username,
-                'chat_title': validate_title(message.chat.title),
+                'chat_username': real_chat_username,
+                'chat_title': validate_title(real_chat_title),
                 'file_fullname':truncate_filename(file_name),
                 'temp_file_fullname':truncate_filename(temp_file_name),
                 'file_format':file_format
