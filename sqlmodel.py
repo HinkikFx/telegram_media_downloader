@@ -134,7 +134,6 @@ class Downloaded(BaseModel):
             downloaded = Downloaded.select().where(Downloaded.mime_type == mime_type, Downloaded.media_size == media_size, Downloaded.status==1)
             filename = filename.split(".")[0]
             for record in downloaded:
-                print (record.filename)
                 filename_db = record.filename.split(".")[0]
                 title_db = record.title
                 for namea in [filename_db, title_db]:
