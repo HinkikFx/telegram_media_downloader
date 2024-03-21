@@ -1,30 +1,10 @@
+import peewee
 from peewee import *
 from datetime import datetime
-import re,difflib
+from loguru import logger
+from utils import format
 
 db = SqliteDatabase('./downloaded.db')
-
-
-def process_string(a):
-    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
-    if bool(pattern.search(a)):
-        # 去掉开头的非汉字字符
-        a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
-    else:
-        # 去掉开头的非英文字符
-        a = re.sub(r'^[^a-zA-Z]+', '', a)
-    # 去掉所有标点符号和特殊字符
-    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
-    b = re.sub(r_str, "_", a)
-    return b
-
-def string_similar(s1, s2):
-    if s1 == '' or s2 == '':
-        return 0
-    s1 = process_string(s1)
-    s2 = process_string(s2)
-    similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
-    return similar
 
 class UnknownField(object):
     def __init__(self, *_, **__): pass
@@ -34,7 +14,7 @@ class BaseModel(Model):
         database = db
 
 class Downloaded(BaseModel):
-    id = AutoField(column_name='ID', null=False)
+    id = AutoField(column_name='ID', null=True)
     chat_id = IntegerField(column_name='CHAT_ID', null=True)
     message_id = IntegerField(column_name='MESSAGE_ID', null=True)
     filename = TextField(column_name='FILENAME', null=True)
@@ -52,14 +32,22 @@ class Downloaded(BaseModel):
     class Meta:
         table_name = 'Downloaded'
 
-    def addto_localDB(self, dictit):
+    def addto_localDB(self, dictit :dict , status :int = 1):
         try:
-            db.connect()
+            if db.autoconnect == False:
+                db.connect()
             try:
-                if Downloaded.get(chat_id = dict['chat_id'], message_id = dict['message_id'], status=1):
-                    db.close()
-                    return  # 成功则说明存在此条数据，无需再写入
-            except:
+                downloaded = Downloaded.get(chat_id=dictit['chat_id'], message_id=dictit['message_id'])
+                if downloaded:
+                    if downloaded.status == status:
+                        db.close()
+                        return  # 成功则说明存在此条数据，无需再写入
+                    else:
+                        downloaded.status = status
+                        downloaded.save()
+                        db.close()
+                        return  # 成功则说明存在此条数据，无需再写入
+            except peewee.DoesNotExist:
                 pass
 
             # 出错说明不存在此条数据，需写入
@@ -75,17 +63,22 @@ class Downloaded(BaseModel):
             downloaded.media_addtime = dictit['media_addtime']
             downloaded.chat_username = dictit['chat_username']
             downloaded.chat_title = dictit['chat_title']
-            downloaded.adddate = datetime.now().strftime("%Y-%m-%d %H:%M")
-            downloaded.status = 1
+            downloaded.addtime = datetime.now().strftime("%Y-%m-%d %H:%M")
+            downloaded.status = status
             downloaded.save()
             db.close()
-        except:
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
             db.close()
 
-    def search_by_ids(self, chat_id :int, message_id :int):
+    def search_by_ids(self, chat_id :int, message_id :int, status : int = 1):
         try:
-            db.connect()
-            downloaded = Downloaded.get(chat_id = chat_id, message_id = message_id, status=1)
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.get(chat_id = chat_id, message_id = message_id, status = status)
             if downloaded:
                 # 存在，直接读取
                 dictit = {
@@ -100,7 +93,7 @@ class Downloaded(BaseModel):
                     'media_addtime': downloaded.media_addtime,
                     'chat_username': downloaded.chat_username,
                     'chat_title': downloaded.chat_title,
-                    'adddate': downloaded.adddate,
+                    'addtime': downloaded.addtime,
                     'status': downloaded.status
                 }
                 db.close()
@@ -108,44 +101,163 @@ class Downloaded(BaseModel):
             else:
                 db.close()
                 return None
-        except:
+        except peewee.DoesNotExist:
+            db.close()
+            return False
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
             db.close()
             return None
 
-    def is_exist_by_ids(self, chat_id :int, message_id :int):
+    def search_ids_by_status(self, chat_id :int, status :int):
+        ids = []
         try:
-            db.connect()
-            if Downloaded.get(chat_id = chat_id, message_id = message_id, status=1):
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.select(Downloaded.message_id).where(Downloaded.chat_id == chat_id, Downloaded.status == status)
+            if downloaded:
+                # 存在，直接
+                for record in downloaded:
+                    ids.append(record.message_id)
+                db.close()
+                return ids
+            else:
+                db.close()
+                return None
+        except peewee.DoesNotExist:
+            db.close()
+            return False
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
+            db.close()
+            return None
+
+    def search_to_continue_msgs_all(self, status :int = 2):
+        try:
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.select(Downloaded.chat_id, Downloaded.chat_username, Downloaded.message_id).where(Downloaded.status == status)
+            if downloaded:
+                db.close()
+                return downloaded
+            else:
+                db.close()
+                return None
+        except peewee.DoesNotExist:
+            db.close()
+            return None
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
+            db.close()
+            return None
+    def search_to_continue_chats(self, status :int):
+        try:
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.select(Downloaded.chat_id, Downloaded.chat_username).distinct().where(Downloaded.status == status)
+            if downloaded:
+                db.close()
+                return downloaded
+            else:
+                db.close()
+                return None
+        except peewee.DoesNotExist:
+            db.close()
+            return None
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
+            db.close()
+            return None
+
+    def search_to_continue_mgs_by_chatid(self, chat_id: int, status :int):
+        try:
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.select(Downloaded.message_id).where(Downloaded.chat_id == chat_id, Downloaded.status == status)
+            if downloaded:
+                db.close()
+                return downloaded
+            else:
+                db.close()
+                return None
+        except peewee.DoesNotExist:
+            db.close()
+            return None
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
+            db.close()
+            return None
+
+    def is_exist_by_ids(self, chat_id :int, message_id :int, status: int = 1):
+        try:
+            if db.autoconnect == False:
+                db.connect()
+            if Downloaded.get(chat_id = chat_id, message_id = message_id, status = status):
                 db.close()
                 return True
             else:
                 db.close()
                 return False
-        except:
+        except peewee.DoesNotExist:
+            db.close()
+            return False
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
             db.close()
             return False
 
 
 
-    def exist_filename_similar(self, mime_type :str, media_size :int, filename :str, title: str):
+
+    def exist_filename_similar(self, mime_type :str, media_size :int, filename :str, title: str, status: int = 1):
         try:
             similar = 0
-            db.connect()
-            downloaded = Downloaded.select().where(Downloaded.mime_type == mime_type, Downloaded.media_size == media_size, Downloaded.status==1)
-            filename = filename.split(".")[0]
+            if db.autoconnect == False:
+                db.connect()
+            downloaded = Downloaded.select().where(Downloaded.mime_type == mime_type, Downloaded.media_size == media_size, Downloaded.status==status)
+            if filename and '.' in filename:
+                filename = filename.split(".")[0]#todo 去掉 message 前缀 写一个函数来处理
+            if not downloaded:
+                db.close()
+                return 0
             for record in downloaded:
                 filename_db = record.filename.split(".")[0]
                 title_db = record.title
                 for namea in [filename_db, title_db]:
                     for nameb in [filename, title]:
-                        sim_num = string_similar(namea, nameb)
+                        sim_num = format.string_similar(namea, nameb)
                         if sim_num == 1.0:
                             return 1.0
                         if similar < sim_num:
                             similar = sim_num
             db.close()
             return similar
-        except:
+        except peewee.DoesNotExist:
+            db.close()
+            return 0
+        except Exception as e:
+            logger.error(
+                f"[{e}{filename}].",
+                exc_info=True,
+            )
             db.close()
             return False
 
@@ -153,13 +265,21 @@ class Downloaded(BaseModel):
     def max_by_ids(self, chat_id :int):
         max_id = 1
         try:
-            db.connect()
+            if db.autoconnect == False:
+                db.connect()
             max_id = Downloaded.select(fn.Max(Downloaded.message_id)).scalar()
-        except:
-            print ('no data')
+        except peewee.DoesNotExist:
+            db.close()
+            return False
+        except Exception as e:
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
         finally:
             db.close()
         return max_id
+
 
 class SqliteSequence(BaseModel):
     name = BareField(null=True)

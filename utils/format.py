@@ -7,7 +7,9 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Union
-
+import string
+from zhon.hanzi import punctuation  # 导入中文标点符号集合
+import difflib
 
 @dataclass
 class Link:
@@ -126,6 +128,40 @@ def get_date_time(text: str, fmt: str) -> SearchDateTimeResult:
 
     return res
 
+
+
+
+
+def clean_filename(filename :str):
+    # 去除以[]括起来的内容
+    a = re.sub(r'\[.*?\]', '', filename)
+
+    # 去除英文标点符号
+    translator = str.maketrans('', '', string.punctuation)
+    a = a.translate(translator)
+
+    # 去除中文标点符号
+    a = re.sub('[{}]'.format(punctuation), '', a)
+
+    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
+    if bool(pattern.search(a)):
+        # 去掉开头的非汉字字符
+        a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
+    else:
+        # 去掉开头的非英文字符
+        a = re.sub(r'^[^a-zA-Z]+', '', a)
+    # 去掉所有标点符号和特殊字符
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
+    b = re.sub(r_str, "_", a)
+    return b
+
+def string_similar(s1, s2):
+    if s1 == '' or s2 == '':
+        return 0
+    s1 = clean_filename(s1)
+    s2 = clean_filename(s2)
+    similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
+    return similar
 
 def replace_date_time(text: str, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
     """Replace text all datetime to the right fmt
@@ -269,10 +305,12 @@ def validate_title(title: str) -> str:
         Chat title
 
     """
-
-    r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
-    new_title = re.sub(r_str, "_", title)
-    return new_title
+    if title:
+        r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
+        new_title = re.sub(r_str, "_", title)
+        return new_title
+    else:
+        return ''
 
 
 def create_progress_bar(progress, total_bars=10):

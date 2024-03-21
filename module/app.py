@@ -553,6 +553,7 @@ class Application:
             self.chat_download_config[self._chat_id] = ChatDownloadConfig()
 
             if _config.get("ids_to_retry"):
+                #此处应读取 retry ids
                 self.chat_download_config[self._chat_id].ids_to_retry = _config[
                     "ids_to_retry"
                 ]
@@ -728,26 +729,26 @@ class Application:
 
         return validate_title(res)
 
-    def need_skip_message(
-        self, download_config: ChatDownloadConfig, message_id: int
-    ) -> bool:
-        """if need skip download message.
-
-        Parameters
-        ----------
-        chat_id: str
-            Config.yaml defined
-
-        message_id: int
-            Readily to download message id
-        Returns
-        -------
-        bool
-        """
-        if message_id in download_config.ids_to_retry_dict:
-            return True
-
-        return False
+    # def need_skip_message(
+    #     self, download_config: ChatDownloadConfig, message_id: int
+    # ) -> bool:
+    #     """if need skip download message.
+    #
+    #     Parameters
+    #     ----------
+    #     chat_id: str
+    #         Config.yaml defined
+    #
+    #     message_id: int
+    #         Readily to download message id
+    #     Returns
+    #     -------
+    #     bool
+    #     """
+    #     if message_id in download_config.ids_to_retry_dict:
+    #         return True
+    #
+    #     return False
 
     def exec_filter(self, download_config: ChatDownloadConfig, meta_data: MetaData):
         """
@@ -786,19 +787,19 @@ class Application:
         for key, value in self.chat_download_config.items():
             # pylint: disable = W0201
             # ids_to_retry 有bug 暂时取消
-            # unfinished_ids = set(value.ids_to_retry)
+            unfinished_ids = set(value.ids_to_retry)
 
-            # for it in value.ids_to_retry:
-            #     if DownloadStatus.SuccessDownload == value.node.download_status.get(
-            #         it, DownloadStatus.FailedDownload
-            #     ):
-            #         unfinished_ids.remove(it)
-            #
-            # for _idx, _value in value.node.download_status.items():
-            #     if DownloadStatus.SuccessDownload != _value:
-            #         unfinished_ids.add(_idx)
+            for it in value.ids_to_retry:
+                if DownloadStatus.SuccessDownload == value.node.download_status.get(
+                    it, DownloadStatus.FailedDownload
+                ):
+                    unfinished_ids.remove(it)
 
-            #self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
+            for _idx, _value in value.node.download_status.items():
+                if DownloadStatus.SuccessDownload != _value:
+                    unfinished_ids.add(_idx)
+
+            self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
 
             if idx >= len(self.app_data["chat"]):
                 self.app_data["chat"].append({})
@@ -857,15 +858,15 @@ class Application:
                 self.config = config
                 self.assign_config(self.config)
 
-        if os.path.exists(os.path.join(os.path.abspath("."), self.app_data_file)):
-            with open(
-                os.path.join(os.path.abspath("."), self.app_data_file),
-                encoding="utf-8",
-            ) as f:
-                app_data = _yaml.load(f.read())
-                if app_data:
-                    self.app_data = app_data
-                    self.assign_app_data(self.app_data)
+        # if os.path.exists(os.path.join(os.path.abspath("."), self.app_data_file)):
+        #     with open(
+        #         os.path.join(os.path.abspath("."), self.app_data_file),
+        #         encoding="utf-8",
+        #     ) as f:
+        #         app_data = _yaml.load(f.read())
+        #         if app_data:
+        #             self.app_data = app_data
+        #             self.assign_app_data(self.app_data)
 
     def pre_run(self):
         """before run application do"""

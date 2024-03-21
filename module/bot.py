@@ -38,7 +38,7 @@ from module.pyrogram_extension import (
 )
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
-from utils.updates import get_latest_release
+#from utils.updates import get_latest_release
 
 # pylint: disable = C0301, R0902
 
@@ -179,6 +179,7 @@ class DownloadBot:
             ),
             types.BotCommand("set_language", _t("Set language")),
             types.BotCommand("stop", _t("Stop bot download or forward")),
+            types.BotCommand("reload", "reload config to restart"),
         ]
 
         self.app = app
@@ -286,6 +287,14 @@ class DownloadBot:
                 stop,
                 filters=pyrogram.filters.command(["stop"])
                 & pyrogram.filters.user(self.allowed_user_ids),
+            )
+        )
+
+        self.bot.add_handler(
+            MessageHandler(
+                reload,
+                filters=pyrogram.filters.command(["reload"])
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
 
@@ -1104,7 +1113,12 @@ async def stop_task(
             f"{_t('Stop')} {_t(task_type.name)}...",
         )
         _bot.stop_task(task_id)
-
+async def reload(
+    client: pyrogram.Client, query: pyrogram.types.CallbackQuery
+):
+    #todo 重新载入配置以check跟踪的频道
+    await start_download_bot
+    return
 
 async def on_query_handler(
     client: pyrogram.Client, query: pyrogram.types.CallbackQuery
