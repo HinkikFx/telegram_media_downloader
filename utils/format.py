@@ -305,12 +305,31 @@ def validate_title(title: str) -> str:
         Chat title
 
     """
-    if title:
-        r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
-        new_title = re.sub(r_str, "_", title)
-        return new_title
-    else:
-        return ''
+
+    r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
+    new_title = re.sub(r_str, "_", title)
+    return new_title
+
+def validate_title_clean(title: str) -> str:
+    """Fix if title validation fails
+
+    Parameters
+    ----------
+    title: str
+        Chat title
+
+    """
+
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
+    b = re.sub(r_str, "_", title)
+
+    # 去除英文标点符号
+    translator = str.maketrans('', '', string.punctuation)
+    b = b.translate(translator)
+
+    # 去除中文标点符号
+    b = re.sub('[{}]'.format(punctuation), '', b)
+    return b
 
 
 def create_progress_bar(progress, total_bars=10):
@@ -324,3 +343,25 @@ def create_progress_bar(progress, total_bars=10):
     remaining_bars = total_bars - completed_bars
     progress_bar = "█" * completed_bars + "░" * remaining_bars
     return progress_bar
+
+def process_string(a):
+    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
+    if bool(pattern.search(a)):
+        # 去掉开头的非汉字字符
+        a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
+    else:
+        # 去掉开头的非英文字符
+        a = re.sub(r'^[^a-zA-Z]+', '', a)
+    # 去掉所有标点符号和特殊字符
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
+    a = re.sub(r_str, "_", a)
+    a = validate_title_clean(a)
+    return a
+
+def string_similar(s1, s2):
+    if s1 == '' or s2 == '':
+        return 0
+    s1 = process_string(s1)
+    s2 = process_string(s2)
+    similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
+    return similar

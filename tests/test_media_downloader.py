@@ -45,7 +45,7 @@ from .test_common import (
     platform_generic_path,
 )
 
-MOCK_DIR: str = "/Users/wuyun/Downloads/Other/Telegram"
+MOCK_DIR: str = "/root/project"
 if platform.system() == "Windows":
     MOCK_DIR = "\\root\\project"
 MOCK_CONF = {
@@ -383,7 +383,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 platform_generic_path(
-                    "/Users/wuyun/Downloads/Other/Telegram/test1/2019_07/1 - voice_2019-07-25T14_53_50.ogg"
+                    "/root/project/test1/2019_07/1 - voice_2019-07-25T14_53_50.ogg"
                 ),
                 platform_generic_path(
                     os.path.join(
@@ -410,7 +410,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/test2/2019_08/2 - ADAVKJYIFV.jpg"),
+                platform_generic_path("/root/project/test2/2019_08/2 - ADAVKJYIFV.jpg"),
                 platform_generic_path(
                     os.path.join(app.temp_save_path, "test2/2 - ADAVKJYIFV.jpg")
                 ),
@@ -436,7 +436,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 platform_generic_path(
-                    "/Users/wuyun/Downloads/Other/Telegram/test2/2019_08/2 - #home #book - ADAVKJYIFV.jpg"
+                    "/root/project/test2/2019_08/2 - #home #book - ADAVKJYIFV.jpg"
                 ),
                 platform_generic_path(
                     os.path.join(
@@ -463,7 +463,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/test2/0/3 - sample_document.pdf"),
+                platform_generic_path("/root/project/test2/0/3 - sample_document.pdf"),
                 platform_generic_path(
                     os.path.join(app.temp_save_path, "test2/3 - sample_document.pdf")
                 ),
@@ -492,7 +492,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 platform_generic_path(
-                    "/Users/wuyun/Downloads/Other/Telegram/test2/0/3-#work-sample_document.pdf"
+                    "/root/project/test2/0/3-#work-sample_document.pdf"
                 ),
                 platform_generic_path(
                     os.path.join(
@@ -522,7 +522,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 platform_generic_path(
-                    "/Users/wuyun/Downloads/Other/Telegram/test2/2021_08/4 - sample_audio.mp3"
+                    "/root/project/test2/2021_08/4 - sample_audio.mp3"
                 ),
                 platform_generic_path(
                     os.path.join(app.temp_save_path, "test2/4 - sample_audio.mp3")
@@ -547,7 +547,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/test2/2022_08/5.mp4"),
+                platform_generic_path("/root/project/test2/2022_08/5.mp4"),
                 platform_generic_path(os.path.join(app.temp_save_path, "test2/5.mp4")),
                 "mp4",
             ),
@@ -570,7 +570,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/test2/2022_08/5 - test.mp4"),
+                platform_generic_path("/root/project/test2/2022_08/5 - test.mp4"),
                 platform_generic_path(
                     os.path.join(app.temp_save_path, "test2/5 - test.mp4")
                 ),
@@ -596,7 +596,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
 
         self.assertEqual(
             (
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/-123/2022_08/5 - test.mp4"),
+                platform_generic_path("/root/project/-123/2022_08/5 - test.mp4"),
                 platform_generic_path(
                     os.path.join(app.temp_save_path, "-123/5 - test.mp4")
                 ),
@@ -622,7 +622,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 platform_generic_path(
-                    "/Users/wuyun/Downloads/Other/Telegram/test2/2019_07/6 - video_note_2019-07-25T14_53_50.mp4"
+                    "/root/project/test2/2019_07/6 - video_note_2019-07-25T14_53_50.mp4"
                 ),
                 platform_generic_path(
                     os.path.join(
@@ -666,7 +666,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 DownloadStatus.SuccessDownload,
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/-123/0/5 - sample_video.mp4"),
+                platform_generic_path("/root/project/-123/0/5 - sample_video.mp4"),
             ),
             result,
         )
@@ -687,7 +687,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 DownloadStatus.SuccessDownload,
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/-123/0/6 - sample_video.mov"),
+                platform_generic_path("/root/project/-123/0/6 - sample_video.mov"),
             ),
             result,
         )
@@ -794,7 +794,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
         self.assertEqual(
             (
                 DownloadStatus.SuccessDownload,
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/-123/0/12 - sample_video.mp4"),
+                platform_generic_path("/root/project/-123/0/12 - sample_video.mp4"),
             ),
             result,
         )
@@ -941,7 +941,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
             res,
             (
                 DownloadStatus.SuccessDownload,
-                platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/-123/0/312 - sucess_down.mp4"),
+                platform_generic_path("/root/project/-123/0/312 - sucess_down.mp4"),
             ),
         )
 
@@ -1058,7 +1058,7 @@ class MediaDownloaderTestCase(unittest.TestCase):
     #     app.chat_download_config[8654123].last_read_message_id = 0
     #     self.loop.run_until_complete(worker(client))
     #     mock_remove.assert_called_with(
-    #         platform_generic_path("/Users/wuyun/Downloads/Other/Telegram/8654123/0/312 - sucess_down.mp4")
+    #         platform_generic_path("/root/project/8654123/0/312 - sucess_down.mp4")
     #     )
 
     @classmethod

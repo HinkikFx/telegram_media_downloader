@@ -18,9 +18,12 @@ from module.language import Language, set_language
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
 
+import sqlmodel
+
 _yaml = yaml.YAML()
 # pylint: disable = R0902
 
+db_retry = sqlmodel.RetryIds()
 
 class DownloadStatus(Enum):
     """Download status"""
@@ -619,8 +622,8 @@ class Application:
                 chats = app_data["chat"]
                 for chat in chats:
                     if (
-                        "chat_id" in chat
-                        and chat["chat_id"] in self.chat_download_config
+                            "chat_id" in chat
+                            and chat["chat_id"] in self.chat_download_config
                     ):
                         chat_id = chat["chat_id"]
                         self.chat_download_config[chat_id].ids_to_retry = chat.get(
@@ -729,26 +732,26 @@ class Application:
 
         return validate_title(res)
 
-    # def need_skip_message(
-    #     self, download_config: ChatDownloadConfig, message_id: int
-    # ) -> bool:
-    #     """if need skip download message.
-    #
-    #     Parameters
-    #     ----------
-    #     chat_id: str
-    #         Config.yaml defined
-    #
-    #     message_id: int
-    #         Readily to download message id
-    #     Returns
-    #     -------
-    #     bool
-    #     """
-    #     if message_id in download_config.ids_to_retry_dict:
-    #         return True
-    #
-    #     return False
+    def need_skip_message(
+        self, download_config: ChatDownloadConfig, message_id: int
+    ) -> bool:
+        """if need skip download message.
+
+        Parameters
+        ----------
+        chat_id: str
+            Config.yaml defined
+
+        message_id: int
+            Readily to download message id
+        Returns
+        -------
+        bool
+        """
+        if message_id in download_config.ids_to_retry_dict:
+            return True
+
+        return False
 
     def exec_filter(self, download_config: ChatDownloadConfig, meta_data: MetaData):
         """
@@ -786,17 +789,23 @@ class Application:
 
         for key, value in self.chat_download_config.items():
             # pylint: disable = W0201
-            # ids_to_retry 有bug 暂时取消
-            unfinished_ids = set(value.ids_to_retry)
-
-            for it in value.ids_to_retry:
-                if DownloadStatus.SuccessDownload == value.node.download_status.get(
-                    it, DownloadStatus.FailedDownload
-                ):
-                    unfinished_ids.remove(it)
+            # 改为只把排队下载中的ids放入unfinished_ids 列表
+            # unfinished_ids = set(value.ids_to_retry)
+            #
+            # for it in value.ids_to_retry:
+            #     if DownloadStatus.SuccessDownload == value.node.download_status.get(
+            #         it, DownloadStatus.FailedDownload
+            #     ):
+            #         unfinished_ids.remove(it)
+            #
+            # for _idx, _value in value.node.download_status.items():
+            #     if DownloadStatus.SuccessDownload != _value:
+            #         unfinished_ids.add(_idx)
+            # 改为只把排队下载中的ids放入unfinished_ids 列表
+            unfinished_ids = set()
 
             for _idx, _value in value.node.download_status.items():
-                if DownloadStatus.SuccessDownload != _value:
+                if DownloadStatus.Downloading == _value:
                     unfinished_ids.add(_idx)
 
             self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
@@ -804,10 +813,12 @@ class Application:
             if idx >= len(self.app_data["chat"]):
                 self.app_data["chat"].append({})
 
-            if value.finish_task:
-                self.config["chat"][idx]["last_read_message_id"] = (
-                    value.last_read_message_id + 1
-                )
+            # TODO 此处可能有问题 当retry列表有大数字时 哪怕前面没下载也会写一个最大的数
+            max_retry = 0
+            if self.chat_download_config[key].ids_to_retry:
+                max_retry = max(self.chat_download_config[key].ids_to_retry)
+
+            self.config["chat"][idx]["last_read_message_id"] = max(value.last_read_message_id , max_retry)
 
             self.app_data["chat"][idx]["chat_id"] = key
             self.app_data["chat"][idx]["ids_to_retry"] = value.ids_to_retry
@@ -825,6 +836,7 @@ class Application:
         if self.config.get("download_filter"):
             self.config.pop("download_filter")
 
+
         if self.config.get("last_read_message_id"):
             self.config.pop("last_read_message_id")
 
@@ -838,10 +850,17 @@ class Application:
             with open(self.config_file, "w", encoding="utf-8") as yaml_file:
                 _yaml.dump(self.config, yaml_file)
 
-        # 不再写入data.yaml文件
-        #if immediate:
-        #    with open(self.app_data_file, "w", encoding="utf-8") as yaml_file:
-        #        _yaml.dump(self.app_data, yaml_file)
+        #retry 写入数据库
+        if self.app_data.get('chat'):
+            for retry_chat in self.app_data.get('chat'):
+                retry_chat_id = retry_chat.get('chat_id')
+                retry_msg_ids = retry_chat.get('ids_to_retry')
+                if retry_msg_ids:
+                    db_retry.retry_msg_insert_to_db(retry_chat_id, retry_msg_ids)
+            #被上面的写入数据库替代
+            # if immediate:
+            #     with open(self.app_data_file, "w", encoding="utf-8") as yaml_file:
+            #         _yaml.dump(self.app_data, yaml_file)
 
     def set_language(self, language: Language):
         """Set Language"""
@@ -858,6 +877,17 @@ class Application:
                 self.config = config
                 self.assign_config(self.config)
 
+        retrys = db_retry.load_retry_msg_from_db()
+        for chat in retrys:
+            if chat.get('chat_id') in self.chat_download_config:
+                chat_id = chat.get('chat_id')
+                self.chat_download_config[chat_id].ids_to_retry = chat.get('ids_to_retry', [])
+                for it_str in self.chat_download_config[chat_id].ids_to_retry:
+                    it = int(it_str)
+                    self.chat_download_config[chat_id].ids_to_retry_dict[
+                        it
+                    ] = True
+        #以下程序被上述从数据库读取数据代替
         # if os.path.exists(os.path.join(os.path.abspath("."), self.app_data_file)):
         #     with open(
         #         os.path.join(os.path.abspath("."), self.app_data_file),
