@@ -1,10 +1,134 @@
-api_hash: 8b71c214b961905539c966b866bb4499
-api_id: 27545157
-bot_token: 5598238561:AAFKnE3bxT5IgknfVyVCsdfxxkW1CJDw-nA
+#147
+#api_hash: 8b71c214b961905539c966b866bb4499
+#api_id: 27545157
+#bot_token: 5598238561:AAFKnE3bxT5IgknfVyVCsdfxxkW1CJDw-nA
+
+#153
+api_hash: 6f6d1ab0323a9e23ad5a7da6267e7f45
+api_id: 21971696
+bot_token: 6147440310:AAHDmwkypScL5qYaX_qI-bEeGMr1gOt5tGg
+
 chat:
-- chat_id: Hxiaowen
-  last_read_message_id: 1
-  download_filter: file_extension == '.txt'
+#- chat_id: AV22918
+#  last_read_message_id: 101
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: sexbook999
+#  last_read_message_id: 2657
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: TG672
+#  last_read_message_id: 2784
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: tghwxsdq
+#  last_read_message_id: 932
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: xiaohuangshu58
+#  last_read_message_id: 145
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: yellowxiaoshuo
+#  last_read_message_id: 32387
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: boluobaohezuqun
+#  last_read_message_id: 6779
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: chengrenshuwu
+#  last_read_message_id: 34810
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: Dk18book
+#  last_read_message_id: 9971
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: g_qwxs
+#  last_read_message_id: 23608
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: happylibrary
+#  last_read_message_id: 3080
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: Hxiaowen
+#  last_read_message_id: 10997
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: JinPingMei
+#  last_read_message_id: 20028
+#  download_filter: file_extension == '.txt' or file_extension == 'txt'
+#- chat_id: shenyin1
+#  last_read_message_id: 3784
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmr38zz
+#  last_read_message_id: 635
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmrcabian
+#  last_read_message_id: 52483
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmrebook18
+#  last_read_message_id: 2871
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmrforme
+#  last_read_message_id: 6496
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmrforus
+#  last_read_message_id: 4434
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmrgay
+#  last_read_message_id: 13578
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: asmryinshenggu
+#  last_read_message_id: 49023
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: bfyyyds03
+#  last_read_message_id: 609
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: eszmldj
+#  last_read_message_id: 974
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: FuckyouWasteTrump
+#  last_read_message_id: 6820
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: cn_asmr
+#  last_read_message_id: 3210
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: cp3766
+#  last_read_message_id: 13103
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: Hentaii_asmr
+#  last_read_message_id: 7139
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: itssteinsgate
+#  last_read_message_id: 2703
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: jiaochuang
+#  last_read_message_id: 51469
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: lygasmr
+#  last_read_message_id: 2315
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: niceasmr_JLQ
+#  last_read_message_id: 39852
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: niceasmrs
+#  last_read_message_id: 18910
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: ysxs6
+#  last_read_message_id: 14163
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: ysxs888
+#  last_read_message_id: 1731
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: zsygrasmr
+#  last_read_message_id: 17044
+#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
+#- chat_id: YuZuKitty6
+#  last_read_message_id: 34
+#  download_filter: media_type == 'video' && media_duration >= 300
+- chat_id: Nana_taipei520
+  last_read_message_id: 13421
+  download_filter: media_type == 'video' && media_duration >= 300
+#- chat_id: qiobnxingcai6
+#  last_read_message_id: 17111
+#  download_filter: media_type == 'video' && media_duration >= 300
+#- chat_id: HongKongDoll2233
+#  last_read_message_id: 1067
+#  download_filter: media_type == 'video' && media_duration >= 300
+#- chat_id: nanashipin
+#  last_read_message_id: 99
+#  download_filter: media_type == 'video' && media_duration >= 300
 file_formats:
   audio:
   - all
@@ -14,26 +138,31 @@ file_formats:
   - all
 file_path_prefix:
 - chat_title
-- media_datetime
-upload_drive:
-  enable_upload_file: false
-  remote_dir: moux-docu:/telegram
-  rclone_path: /usr/bin/rclone
+#upload_drive:
+#  enable_upload_file: false
+#  remote_dir: moux-docu:/telegram
+#  rclone_path: /usr/bin/rclone
 media_types:
 - audio
 - photo
 - video
 - document
-- voice
-- video_note
+#- voice
+#- video_note
 # in linux please use /
 # save_path: E:\github\telegram_media_downloader
-save_path: /Users/wuyun/Downloads/alist/telegram
+save_path:
+  video: /Users/wuyun/Downloads/Other/moux-docu/telegram
+  audio: /Users/wuyun/Downloads/Other/moux-docu/telegram
+  photo: /Users/wuyun/Downloads/Other/moux-docu/telegram
+  document: /Users/wuyun/Downloads/Other/moux-docu/telegram
+
 temp_save_path: /Users/wuyun/Downloads/Other/Telegram/temp
+
 file_name_prefix:
 - message_id
 - file_name
-max_download_task: 1
+max_download_task: 2
 allowed_user_ids:
 - me
 - '@Mouxwu'
@@ -43,3 +172,7 @@ proxy:
   port: 62808
   scheme: socks5
 language: ZH
+date_format: '%Y-%m'
+web_host: 0.0.0.0
+web_port: 25555
+web_login_secret: '!@!%WYUn'

@@ -359,7 +359,10 @@ class Application:
 
         self.chat_download_config: dict = {}
 
-        self.save_path = os.path.join(os.path.abspath("."), "downloads")
+        #self.save_path = os.path.join(os.path.abspath("."), "downloads")
+        self.save_path: dict = {}
+
+
         self.temp_save_path = os.path.join(os.path.abspath("."), "temp")
         self.api_id: str = ""
         self.api_hash: str = ""
@@ -678,14 +681,15 @@ class Application:
             file save path prefix
         """
 
-        res: str = self.save_path
-        for prefix in self.file_path_prefix:
-            if prefix == "chat_title":
-                res = os.path.join(res, chat_title)
-            elif prefix == "media_datetime":
-                res = os.path.join(res, media_datetime)
-            elif prefix == "media_type":
-                res = os.path.join(res, media_type)
+        res: str = self.save_path.get(media_type)
+        if res and res !='':
+            for prefix in self.file_path_prefix:
+                if prefix == "chat_title":
+                    res = os.path.join(res, chat_title)
+                elif prefix == "media_datetime":
+                    res = os.path.join(res, media_datetime)
+                elif prefix == "media_type":
+                    res = os.path.join(res, media_type)
         return res
 
         # update by mouxmoux
@@ -804,9 +808,13 @@ class Application:
             # 改为只把排队下载中的ids放入unfinished_ids 列表
             unfinished_ids = set()
 
+            max_try = 0
+
             for _idx, _value in value.node.download_status.items():
                 if DownloadStatus.Downloading == _value:
                     unfinished_ids.add(_idx)
+                elif DownloadStatus.SuccessDownload == _value:
+                    max_try = max(_idx, max_try)
 
             self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
 
@@ -814,11 +822,11 @@ class Application:
                 self.app_data["chat"].append({})
 
             # TODO 此处可能有问题 当retry列表有大数字时 哪怕前面没下载也会写一个最大的数
-            max_retry = 0
+            
             if self.chat_download_config[key].ids_to_retry:
-                max_retry = max(self.chat_download_config[key].ids_to_retry)
+                max_try = max(self.chat_download_config[key].ids_to_retry)
 
-            self.config["chat"][idx]["last_read_message_id"] = max(value.last_read_message_id , max_retry)
+            self.config["chat"][idx]["last_read_message_id"] = max(value.last_read_message_id , max_try)
 
             self.app_data["chat"][idx]["chat_id"] = key
             self.app_data["chat"][idx]["ids_to_retry"] = value.ids_to_retry

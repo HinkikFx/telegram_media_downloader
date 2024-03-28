@@ -63,12 +63,17 @@ async def update_download_status(
     if node.is_stop_transmission:
         client.stop_transmission()
 
-    chat_id = node.chat_id
+    # 加入特殊的首行 记录队列情况
+    # 约定 message_id = -1时 即队列情况 并设定 chat_id = '队列Queue' message_id= '-1'
+    if message_id == '-1':
+        chat_id = '队列Queue'
+    else:
+        chat_id = node.chat_id
 
-    while get_download_state() == DownloadState.StopDownload:
-        if node.is_stop_transmission:
-            client.stop_transmission()
-        await asyncio.sleep(1)
+        while get_download_state() == DownloadState.StopDownload:
+            if node.is_stop_transmission:
+                client.stop_transmission()
+            await asyncio.sleep(1)
 
     if not _download_result.get(chat_id):
         _download_result[chat_id] = {}
@@ -93,6 +98,10 @@ async def update_download_status(
         download_speed = max(download_speed, 0)
 
         _download_result[chat_id][message_id]["down_byte"] = down_byte
+
+        if chat_id == '队列Queue':
+            _download_result[chat_id][message_id]["total_size"] = total_size
+
         _download_result[chat_id][message_id]["end_time"] = end_time
         _download_result[chat_id][message_id]["download_speed"] = download_speed
         _download_result[chat_id][message_id][
@@ -100,6 +109,10 @@ async def update_download_status(
         ] = each_second_total_download
     else:
         each_second_total_download = down_byte
+        if chat_id == '队列Queue':
+            task_id_new = '-1'
+        else:
+            task_id_new = node.task_id
         _download_result[chat_id][message_id] = {
             "down_byte": down_byte,
             "total_size": total_size,
@@ -108,7 +121,7 @@ async def update_download_status(
             "end_time": cur_time,
             "download_speed": down_byte / (cur_time - start_time),
             "each_second_total_download": each_second_total_download,
-            "task_id": node.task_id,
+            "task_id": task_id_new
         }
         _total_download_size += down_byte
 
