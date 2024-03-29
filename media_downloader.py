@@ -29,7 +29,7 @@ from module.pyrogram_extension import (
     upload_telegram_chat,
 )
 from module.web import init_web
-from utils.format import truncate_filename, validate_title, validate_title_clean
+from utils.format import truncate_filename, validate_title, validate_title_clean, process_string
 from utils.log import LogFilter
 from utils.meta import print_meta
 from utils.meta_data import MetaData
@@ -54,9 +54,6 @@ app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 
 queue_maxsize = 0
 queue: asyncio.Queue = asyncio.Queue(maxsize = queue_maxsize)
-
-queue_chat_maxsize = 1
-queue_chat: asyncio.Queue = asyncio.Queue(maxsize = queue_chat_maxsize)
 
 RETRY_TIME_OUT = 3
 
@@ -194,6 +191,15 @@ def is_aka_exist(media_dict: dict) -> bool: #存在等价文件 chat_id message_
     if _is_exist(file_path) or (os.path.exists(file_dir) and find_file_starting_with(file_dir, filename_pre)):
         return True
 
+def is_exist_by_forward(media_dict: dict) -> bool:
+    if media_dict.get('msg_from'):
+        _, file_save_url, _ = get_media_info_str(media_dict.get('msg_from_chat_username'), media_dict.get('msg_from_chat_id'),
+                           media_dict.get('msg_from_message_id'), media_dict.get('msg_filename'),
+                           media_dict.get('msg_caption'), media_dict.get('media_type'))
+        if _is_exist(file_save_url):
+            return True
+    return False
+
 def _is_exist(file_path: str) -> bool:
     """
     Check if a file exists and it is not a directory.
@@ -236,7 +242,35 @@ def is_exist_in_alldb(msgdict: dict):
 
 
 # pylint: disable = R0912
+def get_media_info_str(msg_chat_username: str, msg_chat_id: int, msg_message_id: int, msg_filename: str, msg_caption: str, media_type: str):
 
+    if msg_filename and msg_filename != '':
+        msg_file_onlyname, msg_file_format = os.path.splitext(msg_filename)
+    else:
+        msg_file_onlyname = 'No_Name'
+        msg_file_format = '.unknown'
+
+    if msg_caption and msg_caption != '' and (
+            'telegram' in msg_filename.lower() or re.sub(r'[._\-\s]', '',
+                                                         msg_file_onlyname).isdigit()):
+        msg_filename = app.get_file_name(msg_message_id,
+                                         f"{msg_caption}{msg_file_format}",
+                                         msg_caption)
+    else:
+        msg_filename = validate_title(app.get_file_name(msg_message_id, msg_filename, msg_caption))
+
+        # 处理存储用message衍生信息
+    dirname = validate_title(f"[{str(msg_chat_id)}]{msg_chat_username}")
+
+    file_save_path = os.path.join(app.get_file_save_path(media_type, dirname, ''),
+                                  str(int(msg_message_id) // 100 * 100).zfill(6))
+    temp_save_path = os.path.join(app.temp_save_path, dirname,
+                                  str(int(msg_message_id) // 100 * 100).zfill(6))
+
+    file_save_url = os.path.join(file_save_path, truncate_filename(msg_filename))
+    temp_save_url = os.path.join(temp_save_path, truncate_filename(msg_filename))
+
+    return msg_filename, file_save_url, temp_save_url
 
 async def _get_media_meta(
     message: pyrogram.types.Message
@@ -257,42 +291,27 @@ async def _get_media_meta(
     msg_time = ''
     msg_date = ''
     try:
-        #处理message原始数据
+        # TODO 下面有bug 当是转发信息时 如果config里没有转发源 则后面会出错 先暂时不记录原始chat_id
+        msg_from = False  # 是否转发的信息
+        msg_real_chat_id = 0 - message.chat.id - 1000000000000
+        msg_real_chat_username = message.chat.username
+        msg_real_message_id = message.id
+        msg_real_chat_title = message.chat.title
+
         if message.forward_from_chat and message.forward_from_chat.id and message.forward_from_message_id:
-            msg_real_chat_id = 0 - message.forward_from_chat.id - 1000000000000
-            msg_real_chat_username = message.forward_from_chat.username
-            msg_real_message_id = message.forward_from_message_id
-            msg_real_chat_title = validate_title(message.forward_from_chat.title)
-        else:
-            msg_real_chat_id = 0 - message.chat.id - 1000000000000
-            msg_real_chat_username = message.chat.username
-            msg_real_message_id = message.id
-            msg_real_chat_title = message.chat.title
+            msg_from_chat_id = 0 - message.forward_from_chat.id - 1000000000000
+            msg_from_chat_username = message.forward_from_chat.username
+            msg_from_message_id = message.forward_from_message_id
+            msg_from_chat_title = validate_title(message.forward_from_chat.title)
+            msg_from = True
 
         if message.date:
             msg_time = message.date.strftime("%Y-%m-%d %H:%M")
             msg_date = message.date.strftime(app.date_format)
 
-
-        # if msg_real_message_id == 10581:
-        #     print('debug')
-        #
-        # if msg_real_chat_username == 'asmrgay':
-        #     print('debug')
-
-        # if ((msg_real_chat_username == 'asmrgay' and msg_real_message_id == 10581)
-        #         or (msg_real_chat_username== 'asmrcabian' and msg_real_message_id == 35470)
-        #         or (msg_real_chat_username== 'asmrforus' and msg_real_message_id == 688)
-        #         or (msg_real_chat_username== 'asmrgay' and msg_real_message_id == 8262)):
-        #     print('debug')
-
-        if (msg_real_chat_username == 'asmrcabian' and msg_real_message_id == 35470):
-            print('debug')
-
         msg_caption = getattr(message, "caption", '')
-        #暂时无用 msg_link = getattr(message, "link", None)
         msg_media_group_id = getattr(message, "media_group_id", None)
-        #msg_title = getattr(message, "title", '')
+
         if msg_caption:
             msg_caption = validate_title(msg_caption)
             app.set_caption_name(msg_real_message_id, msg_media_group_id, msg_caption)
@@ -301,87 +320,36 @@ async def _get_media_meta(
 
         if message.audio and message.audio != '':
             msg_type = 'audio'
-            if msg_caption and msg_caption != '':
-                msg_title = msg_caption
-            if msg_caption and msg_caption != '' and ('telegram' in message.audio.file_name.lower() or re.sub(r'[._\-\s]', '',
-                                                                                              os.path.splitext(
-                                                                                                      message.audio.file_name)[0]).isdigit()):
-                msg_filename = app.get_file_name(msg_real_message_id,
-                                                 f"{msg_caption}{message.audio.file_name}",
-                                                 msg_caption)
-            else:
-                msg_filename = app.get_file_name(msg_real_message_id, message.audio.file_name , msg_caption)
-            if msg_filename != '':
-                msg_file_format = os.path.splitext(message.audio.file_name)[1]
-                msg_title = validate_title_clean(os.path.splitext(message.audio.file_name)[0])
-            else:
-                msg_file_format = 'unknown'
-                msg_title = ''
+            msg_filename = message.audio.file_name
             msg_duration = message.audio.duration
             msg_size = message.audio.file_size
             media_obj = message.audio
-            if not msg_file_format or msg_file_format == '':
-                msg_file_format = 'mp3'
+            msg_file_format = get_extension(media_obj.file_id, getattr(media_obj, "mime_type", "")).replace('.', '')
+            msg_title = ''
         elif message.video and message.video != '':
             msg_type = 'video'
-            if msg_caption and msg_caption != '':
-                msg_title = msg_caption
-            if msg_caption and msg_caption != '' and ('telegram' in message.video.file_name.lower() or re.sub(r'[._\-\s]', '',
-                                                                                              os.path.splitext(
-                                                                                                      message.video.file_name)[
-                                                                                                  0]).isdigit()):
-                msg_filename = app.get_file_name(msg_real_message_id,
-                                                 f"{msg_caption}{message.video.file_name}",
-                                                 msg_caption)
-            else:
-                msg_filename = app.get_file_name(msg_real_message_id, message.video.file_name, msg_caption)
-            if msg_filename != '':
-                msg_file_format = os.path.splitext(message.video.file_name)[1]
-                msg_title = validate_title_clean(os.path.splitext(message.video.file_name)[0])
-            else:
-                msg_file_format = 'unknown'
-                msg_title = ''
+            msg_filename = message.video.file_name
             msg_duration = message.video.duration
             msg_size = message.video.file_size
-            #暂时无用 msg_width = message.video.width
-            #暂时无用 mag_heigth = message.video.height
             media_obj = message.video
-            if not msg_file_format or msg_file_format == '':
-                msg_file_format = 'mp4'
+            msg_file_format = get_extension(media_obj.file_id, getattr(media_obj, "mime_type", "")).replace('.', '')
+            msg_title = ''
         elif message.photo and message.photo != '':
             msg_type = 'photo'
-            msg_title = ''
-            if msg_caption and msg_caption != '' and not msg_title:
-                msg_title = msg_caption
-            if msg_caption and msg_caption != '':
-                msg_filename = app.get_file_name(msg_real_message_id,
-                                                 f"{msg_caption}.jpg",
-                                                 msg_caption)
-            else:
-                msg_filename = app.get_file_name(msg_real_message_id, '', msg_caption)
-
-            msg_file_format = 'jpg'
+            msg_filename = f"[{msg_real_chat_username}]{msg_real_message_id}.jpg"
             msg_duration = 0
             msg_size = message.photo.file_size
-            #暂时无用 msg_width = message.photo.width
-            #暂时无用 mag_heigth = message.photo.height
             media_obj = message.photo
-            if not msg_file_format or msg_file_format == '':
-                msg_file_format = 'jpg'
+            msg_file_format = get_extension(media_obj.file_id, getattr(media_obj, "mime_type", "")).replace('.', '')
+            msg_title = ''
         elif message.document and message.document != '':
             msg_type = 'document'
-            msg_filename = app.get_file_name(msg_real_message_id, message.document.file_name , msg_caption)
-            if msg_filename != '':
-                msg_file_format = os.path.splitext(message.document.file_name)[1]
-                msg_title = validate_title_clean(os.path.splitext(message.document.file_name)[0])
-            else:
-                msg_file_format = 'unknown'
-                msg_title =''
+            msg_filename = message.document.file_name
             msg_duration = 0
             msg_size = message.document.file_size
             media_obj = message.document
-            if not msg_file_format or msg_file_format == '':
-                msg_file_format = 'txt'
+            msg_file_format = get_extension(media_obj.file_id, getattr(media_obj, "mime_type", "")).replace('.', '')
+            msg_title = ''
         else:
             logger.info(
                 f"无需处理的媒体类型: ",
@@ -389,47 +357,16 @@ async def _get_media_meta(
             )
             return None
 
-        # 处理存储用message衍生信息
-        dirname = validate_title(f"[{str(msg_real_chat_id)}]{msg_real_chat_username}")
+        msg_filename, file_save_url, temp_save_url = get_media_info_str(msg_real_chat_username, msg_real_chat_id, msg_real_message_id, msg_filename, msg_caption, msg_type)
 
-        if msg_date:
-            datetime_dir_name = msg_date
-        else:
-            datetime_dir_name = "0000-00"
+        if not msg_title or msg_title == '':
+            msg_title = validate_title_clean(process_string(os.path.splitext(msg_filename)[0]))
 
-        if msg_type in ["voice", "video_note"]:
-            # pylint: disable = C0209
-            # voice video_note 暂不处理
-            logger.error(
-                f"[voice video_note 暂不处理]: ",
-                exc_info=True,
-            )
-        else:
-            if not msg_filename:
-                msg_file_format = get_extension(
-                    media_obj.file_id, getattr(media_obj, "mime_type", "")
-                ).replace('.','')
-            elif not msg_file_format:
-                msg_file_format = get_extension(
-                    media_obj.file_id, getattr(media_obj, "mime_type", "")
-                )
+        if not msg_filename or 'None' in file_save_url:
+            logger.error(f"[{msg_real_chat_username}]{msg_real_message_id}: ",exc_info=True,)
 
-
-
-            if not msg_filename:
-               msg_filename = f"{app.get_file_name(msg_real_message_id, msg_filename, msg_caption)}.{msg_file_format}"
-
-            file_save_path = os.path.join(app.get_file_save_path(msg_type, dirname, datetime_dir_name),
-                                          str(int(msg_real_message_id) // 100 * 100).zfill(6))
-            temp_save_path = os.path.join(app.temp_save_path, dirname,
-                                          str(int(msg_real_message_id) // 100 * 100).zfill(6))
-
-            file_save_url = os.path.join(file_save_path, truncate_filename(msg_filename))
-            temp_save_url = os.path.join(temp_save_path, truncate_filename(msg_filename))
-
-            if not msg_filename or 'None' in file_save_url:
-                logger.error(f"[{msg_real_chat_username}]{msg_real_message_id}: ",exc_info=True,)
-
+        if msg_from:
+            #print('msg_from')
             media_dict = {
                 'chat_id': msg_real_chat_id,
                 'message_id': msg_real_message_id,
@@ -442,9 +379,31 @@ async def _get_media_meta(
                 'media_addtime': msg_time,
                 'chat_username': msg_real_chat_username,
                 'chat_title': msg_real_chat_title,
-                'file_fullname':file_save_url,
-                'temp_file_fullname':temp_save_url,
-                'file_format':msg_type
+                'file_fullname': file_save_url,
+                'temp_file_fullname': temp_save_url,
+                'file_format': msg_type,
+                'msg_from': msg_from,
+                'msg_from_chat_id': msg_from_chat_id,
+                'msg_from_chat_username': msg_from_chat_username,
+                'msg_from_message_id': msg_from_message_id,
+                'msg_from_chat_title': msg_from_chat_title,
+            }
+        else:
+            media_dict = {
+                'chat_id': msg_real_chat_id,
+                'message_id': msg_real_message_id,
+                'filename': msg_filename,
+                'caption': msg_caption,
+                'title': msg_title,
+                'mime_type': msg_file_format,
+                'media_size': msg_size,
+                'media_duration': msg_duration,
+                'media_addtime': msg_time,
+                'chat_username': msg_real_chat_username,
+                'chat_title': msg_real_chat_title,
+                'file_fullname': file_save_url,
+                'temp_file_fullname': temp_save_url,
+                'file_format': msg_type,
             }
     except Exception as e:
         logger.error(
@@ -467,10 +426,10 @@ async def add_download_task(
         return False
     media_dict = await _get_media_meta(message)
     file_path = media_dict.get('file_fullname')
-    if not _is_exist(file_path):  #简单判断 严格不同就进入队列
+    if not _is_exist(file_path) or os.path.getsize(file_path) <= media_dict.get('media_size'):  #简单判断 严格不同就进入队列
         node.download_status[message.id] = DownloadStatus.Downloading
         await queue.put((message, node))
-        logger.info(f"开始处理[{media_dict.get('chat_username')}]{media_dict.get('filename')}   当前队列长：{queue.qsize()}")
+        logger.info(f"加入队列[{media_dict.get('chat_username')}]{media_dict.get('filename')}   当前队列长：{queue.qsize()}")
         node.total_task += 1
         total_queues +=1
         await update_download_status(total_queues_finished, total_queues, '-1',
@@ -607,6 +566,7 @@ def merge_chunkfile(folder_path, output_file, file_size, batch_size=100):
     if _is_exist(output_file) and os.path.getsize(output_file) == file_size:
         return True
     else:
+        os.remove(output_file)
         return False
 
 
@@ -664,15 +624,8 @@ async def download_media(
     message = await fetch_message(client, message)
     message_id = message.id
 
-    # debug
-    # if message_id == 38:
-    #     print('debug')
     if not (message.audio or message.video or message.photo or message.document):
         # logger.info(f"不是媒体类型 自动跳过[{message.chat.username}]{message.id}")
-        return DownloadStatus.SkipDownload, None
-
-    # debug
-    if message.video:
         return DownloadStatus.SkipDownload, None
 
     try:
@@ -701,7 +654,7 @@ async def download_media(
                         if file_name_local != file_name: #文件名不一致则按新规则命名
                             move(file_name_local, file_name)
                             logger.info(
-                                f"id={os.path.split(file_name_local)[1]}被重命名为{os.path.split(file_name)[1]} "
+                                f"[{msg_chat_username}]:{os.path.split(file_name_local)[1]}被重命名为[{msg_chat_username}]:{os.path.split(file_name)[1]} "
                             )
 
                         # 写入数据库 记录已完成下载
@@ -711,14 +664,35 @@ async def download_media(
                 if os.path.getsize(file_name) == media_size:
                     return DownloadStatus.SuccessDownload, None
             else:
-                # 不存在相同文件 但有可能在其他channel里已经下载了 用db来判断
-                if is_exist_in_alldb(media_dict):
-                    logger.info(
-                        f"[{msg_chat_username}]{ui_file_name} 可能"
-                        f"{_t('already download,download skipped')}.\n"
-                    )
+                if media_dict.get('msg_from'):#不存在相同文件 但因为是转发msg 所以有可能在其他channel里已经下载了 判断一下
+                    _, from_file_name, _ = get_media_info_str(media_dict.get('msg_from_chat_username'),
+                                                             media_dict.get('msg_from_chat_id'),
+                                                             media_dict.get('msg_from_message_id'),
+                                                             re.sub(r"^\[\d+\]", "", media_dict.get('filename')),
+                                                             media_dict.get('caption'),
+                                                             media_dict.get('file_format'))
+                from_aka_files = get_aka_file_by_path(from_file_name)
+                if from_aka_files:
+                    for file_name_local in from_aka_files:
+                        file_size_local = os.path.getsize(file_name_local)
+                        if file_size_local and file_size_local == media_size:  # 转发源本地文件存在且一样大
+                            if file_name_local != from_file_name:  # 文件名不一致则按新规则命名
+                                move(file_name_local, from_file_name)
+                                logger.info(
+                                    f"[{media_dict.get('msg_from_chat_username')}]{os.path.split(file_name_local)[1]}被重命名为[{media_dict.get('msg_from_chat_username')}]{os.path.split(from_file_name)[1]} "
+                                )
+                        # 写入数据库 记录已完成下载
+                        media_dict['status'] = 1
+                        insert_into_db(media_dict)
                     return DownloadStatus.SuccessDownload, None
-
+                else:
+                    # 不存在相同文件 但有可能在其他channel里已经下载了 用db来判断
+                    if is_exist_in_alldb(media_dict):
+                        logger.info(
+                            f"[{msg_chat_username}]{ui_file_name} 可能"
+                            f"{_t('already download,download skipped')}.\n"
+                        )
+                        return DownloadStatus.SuccessDownload, None
         else:
             return DownloadStatus.SkipDownload, None
 
@@ -735,9 +709,6 @@ async def download_media(
 
     for retry in range(3):
         try:
-            # 分快下载模式
-            # if msg_chat_username == "YuZuKitty6" and message_id == "36":
-            #     print('debug')
             down_byte = 0
             if media_size >= 1024 * 1024 * 10: #大于10M 就分快下载
                 temp_file_path = os.path.dirname(temp_file_name)
@@ -975,41 +946,19 @@ async def download_chat_task(
     node.is_running = True
 
 
-# async def download_all_chat(client: pyrogram.Client):
-#
-#     """Download All chat"""
-#     for key, value in app.chat_download_config.items():
-#         value.node = TaskNode(chat_id=key)
-#         try:
-#             await download_chat_task(client, value, value.node)
-#
-#         except Exception as e:
-#             logger.warning(f"Download {key} error: {e}")
-#         finally:
-#             value.need_check = True
-
-# 新方法 把chat 也放入队列
 async def download_all_chat(client: pyrogram.Client):
-    for config_it in app.chat_download_config.items():
-        await queue_chat.put(config_it)
 
-# 新方法 把chat 也放入队列
-async def worker_put(client: pyrogram.client.Client):
-    while app.is_running:
+    """Download All chat"""
+    for key, value in app.chat_download_config.items():
+        value.node = TaskNode(chat_id=key)
         try:
-            item = await queue_chat.get()
-            key = item[0]
-            value = item[1]
-            value.node = TaskNode(chat_id=key)
-            try:
-                await download_chat_task(client, value, value.node)
+            await download_chat_task(client, value, value.node)
 
-            except Exception as e:
-                logger.warning(f"Download {key} error: {e}")
-            finally:
-                value.need_check = True
         except Exception as e:
-            logger.exception(f"{e}")
+            logger.warning(f"Download {key} error: {e}")
+        finally:
+            value.need_check = True
+
 
 async def run_until_all_task_finish():
     """Normal download"""
@@ -1066,7 +1015,6 @@ def main():
         logger.success(_t("Successfully started (Press Ctrl+C to stop)"))
 
         app.loop.create_task(download_all_chat(client))
-        app.loop.create_task(worker_put(client))
 
         for _ in range(app.max_download_task):
             task = app.loop.create_task(worker(client))

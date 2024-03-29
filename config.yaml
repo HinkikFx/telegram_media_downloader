@@ -117,17 +117,17 @@ chat:
 #- chat_id: YuZuKitty6
 #  last_read_message_id: 34
 #  download_filter: media_type == 'video' && media_duration >= 300
-- chat_id: Nana_taipei520
-  last_read_message_id: 13421
-  download_filter: media_type == 'video' && media_duration >= 300
+#- chat_id: Nana_taipei520
+#  last_read_message_id: 13421
+#  download_filter: media_type == 'video' && media_duration >= 300
 #- chat_id: qiobnxingcai6
-#  last_read_message_id: 17111
+#  last_read_message_id: 1
 #  download_filter: media_type == 'video' && media_duration >= 300
 #- chat_id: HongKongDoll2233
-#  last_read_message_id: 1067
+#  last_read_message_id: 1
 #  download_filter: media_type == 'video' && media_duration >= 300
 #- chat_id: nanashipin
-#  last_read_message_id: 99
+#  last_read_message_id: 1
 #  download_filter: media_type == 'video' && media_duration >= 300
 file_formats:
   audio:
