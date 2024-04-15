@@ -3,6 +3,7 @@
 import math
 import os
 import re
+import shutil
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,7 @@ from typing import Optional, Union
 import string
 from zhon.hanzi import punctuation  # 导入中文标点符号集合
 import difflib
+import mimetypes
 
 @dataclass
 class Link:
@@ -361,7 +363,163 @@ def process_string(a):
 def string_similar(s1, s2):
     if s1 == '' or s2 == '':
         return 0
-    s1 = process_string(s1)
-    s2 = process_string(s2)
+    s1 = process_string(s1).lower()
+    s2 = process_string(s2).lower()
     similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
     return similar
+
+def find_files_with_prefix(directory, prefix):
+    """
+    在给定目录中查找以指定前缀开头的所有文件。
+
+    Args:
+        directory (str): 要搜索的目录路径。
+        prefix (str): 要匹配的前缀。
+
+    Returns:
+        list: 以指定前缀开头的文件路径列表。
+    """
+    matching_files = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.startswith(prefix):
+                matching_files.append(os.path.join(root, file))
+    return matching_files
+
+def is_exist_files_with_prefix(directory, prefix):
+    """
+    在给定目录中查找以指定前缀开头的所有文件。
+
+    Args:
+        directory (str): 要搜索的目录路径。
+        prefix (str): 要匹配的前缀。
+
+    Returns:
+        list: 以指定前缀开头的文件路径列表。
+    """
+    matching_files = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.startswith(prefix):
+                return True
+    return False
+
+def guess_media_type(file_name_ext: str):
+
+    # video_names = ['avi', 'mpg', 'mpeg', 'mov', 'mp4', 'mkv', 'ts', 'wmv', 'rmvb', 'vob', 'm1v', 'm2v', 'mpv']
+    # audio_names = ['avi', 'mpg', 'mpeg', 'mov', 'mp4', 'mkv', 'ts', 'wmv', 'rmvb', 'vob', 'm1v', 'm2v', 'mpv']
+    #
+    #
+    # media_type = 'default'
+    # if file_name_ext.startswith('.'):
+    #     file_name_ext = file_name_ext[1:]
+    # #先来一波已知的
+    # if file_name_ext in
+
+    if '.' in file_name_ext:
+        mime_type, _ = mimetypes.guess_type(f"aaaa{file_name_ext}")
+    else:
+        mime_type, _ = mimetypes.guess_type(f"aaaa.{file_name_ext}")
+    if mime_type:
+        if mime_type.startswith("video"):
+            media_type =  "video"
+        elif mime_type.startswith("audio"):
+            media_type = "audio"
+        elif mime_type.startswith("text") or mime_type.startswith("application/pdf") or mime_type.startswith("application/msword"):
+            media_type = "document"
+        elif mime_type.startswith("image"):
+            media_type = "photo"
+        elif mime_type.startswith("application/zip"):
+            media_type = "zip"
+        else:
+            return "default"
+    return mime_type
+
+def find_missing_files(folder_path, max_number):
+    missing_ranges = []
+    max_file_number = max_number -1
+    if not os.path.exists(folder_path):
+        missing_ranges = [(0,max_file_number)]
+        return missing_ranges
+    # Create a set to store existing file names
+    all_files = set()
+
+    # Iterate through the range of file names
+    for i in range(max_number):
+        all_files.add(f"{i:08d}")
+
+    # Read the existing file names from the folder
+    if os.path.exists(folder_path):
+        existing_files = set(os.listdir(folder_path))
+        missing_files = all_files - existing_files
+    else:
+        return None
+
+    # Group consecutive missing file names
+    if missing_files is None or len(missing_files) == 0:  # 没有缺失文件
+        return None
+    else:
+        start_range = None
+        max_range = int(max(missing_files))
+        for file_name in sorted(missing_files):
+            cursor_idx = int(file_name)
+            if start_range is None:  # 第一个元素
+                start_range = cursor_idx
+                if cursor_idx == max_range:  # 是最后一个元素
+                    missing_ranges.append((start_range, prev_one))
+                prev_one = cursor_idx
+            elif cursor_idx != prev_one + 1:  # 不连续了
+                missing_ranges.append((start_range, prev_one))
+                start_range = cursor_idx
+                if cursor_idx == max_range:  # 是最后一个元素
+                    missing_ranges.append((start_range, cursor_idx))
+                prev_one = cursor_idx
+            else:  # 连续
+                if cursor_idx == max_range:  # 是最后一个元素
+                    missing_ranges.append((start_range, cursor_idx))
+                prev_one = cursor_idx
+
+        return missing_ranges
+
+def merge_files_cat(folder_path, output_file ):
+    os.system(f"cat '{folder_path}'/* > {output_file}")
+
+def merge_files_shutil(folder_path, output_file ):
+    # 获取文件夹中的所有文件
+    file_list = os.listdir(folder_path)
+    file_list.sort()  # 确保文件按照一致的顺序合并
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    with open(output_file, 'ab') as output_file:
+        for file_name in file_list:
+            file_path = os.path.join(folder_path, file_name)
+            with open(file_path, 'rb') as source:
+                shutil.copyfileobj(source, output_file)
+
+def merge_files_write(folder_path, output_file, batch_size=1000):
+    # 获取文件夹中的所有文件
+    files = os.listdir(folder_path)
+    files.sort()  # 确保文件按照一致的顺序合并
+
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
+    with open(output_file, 'ab') as output_file:
+        for file_name in files:
+            file_path = os.path.join(folder_path, file_name)
+            with open(file_path, 'rb') as source:
+                output_file.write(source.read())
+
+
+def get_folder_files_size(folder_path):
+    #files_size = []
+    total_size = 0
+    files_count = 0
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        for filename in filenames:
+            file_path = os.path.join(dirpath, filename)
+            file_size = os.path.getsize(file_path)
+            #files_size.append((filename,file_size))
+            total_size += file_size
+            files_count += 1
+    return files_count, total_size
