@@ -647,9 +647,6 @@ class Application:
         """
         res: str = ''
 
-        if 'tghwxsdq' in chat_title:
-            print ('debug')
-
         chat_id, chat_username = chat_title.replace('[','').split(']')
         if chat_username and self.chat_download_config.get(chat_username):
             chat_group = self.chat_download_config.get(chat_username).group
@@ -787,6 +784,8 @@ class Application:
                     unfinished_ids.add(_idx)
 
             self.chat_download_config[key].ids_to_retry = list(unfinished_ids)
+
+
 
             if idx >= len(self.app_data.get("chat")):
                 self.app_data["chat"].append({})

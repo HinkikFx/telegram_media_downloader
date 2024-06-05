@@ -13,3 +13,5 @@ pyrogram
 peewee
 zhon
 filesplit
+tqdm
+apscheduler

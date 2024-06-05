@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Union
 import string
-from zhon.hanzi import punctuation  # 导入中文标点符号集合
+import zhon.hanzi  # 导入中文标点符号集合
 import difflib
 import mimetypes
+from opencc import OpenCC
+import json
 
 @dataclass
 class Link:
@@ -20,6 +22,16 @@ class Link:
     group_id: Union[str, int, None] = None
     post_id: Optional[int] = None
     comment_id: Optional[int] = None
+
+waste_word_json_file = os.path.join(os.path.abspath("."), "waste_word_json_file.json")
+
+
+def load_waste_word_json(json_file):
+    if os.path.exists(json_file):
+        # Read existing data from the file
+        with open(json_file, 'r', encoding='utf-8') as f:
+            waste_words = json.load(f)
+        return waste_words
 
 
 def format_byte(size: float, dot=2):
@@ -139,11 +151,10 @@ def clean_filename(filename :str):
     a = re.sub(r'\[.*?\]', '', filename)
 
     # 去除英文标点符号
-    translator = str.maketrans('', '', string.punctuation)
-    a = a.translate(translator)
+    a = re.sub('[{}]'.format(string.punctuation), ' ', a)
 
     # 去除中文标点符号
-    a = re.sub('[{}]'.format(punctuation), '', a)
+    a = re.sub('[{}]'.format(zhon.hanzi.punctuation), ' ', a)
 
     pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
     if bool(pattern.search(a)):
@@ -153,8 +164,8 @@ def clean_filename(filename :str):
         # 去掉开头的非英文字符
         a = re.sub(r'^[^a-zA-Z]+', '', a)
     # 去掉所有标点符号和特殊字符
-    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
-    b = re.sub(r_str, "_", a)
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）+：；《》]+~【】"
+    b = re.sub(r_str, " ", a)
     return b
 
 def string_similar(s1, s2):
@@ -309,7 +320,7 @@ def validate_title(title: str) -> str:
     """
 
     r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
-    new_title = re.sub(r_str, "_", title)
+    new_title = re.sub(r_str, " ", title)
     return new_title
 
 def validate_title_clean(title: str) -> str:
@@ -323,14 +334,13 @@ def validate_title_clean(title: str) -> str:
     """
 
     r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
-    b = re.sub(r_str, "_", title)
+    b = re.sub(r_str, " ", title)
 
     # 去除英文标点符号
-    translator = str.maketrans('', '', string.punctuation)
-    b = b.translate(translator)
+    a = re.sub('[{}]'.format(string.punctuation), ' ', b)
 
     # 去除中文标点符号
-    b = re.sub('[{}]'.format(punctuation), '', b)
+    b = re.sub('[{}]'.format(zhon.hanzi.punctuation), ' ', b)
     return b
 
 
@@ -346,7 +356,23 @@ def create_progress_bar(progress, total_bars=10):
     progress_bar = "█" * completed_bars + "░" * remaining_bars
     return progress_bar
 
-def process_string(a):
+def remove_substrings_with_regex(input_str, keyword_list):
+    # 遍历 keyword_list 中的每个元素
+    for element in keyword_list:
+        # 使用 re.sub() 方法将找到的子字符串替换为空字符串
+        input_str = re.sub(element, " ", input_str).replace('  ', ' ')
+    return input_str
+
+def process_string(string_a: str):
+    a = string_a
+    # 发现文件名中有时包含两次后缀，处理掉
+    if string_a.lower().endswith('mp3'):
+        a = re.sub("mp3", "", a, flags=re.IGNORECASE)
+    elif string_a.lower().endswith('mp4'):
+        a = re.sub("mp4", "", a, flags=re.IGNORECASE)
+
+    waste_word = load_waste_word_json(waste_word_json_file)
+    a = remove_substrings_with_regex(a, waste_word)
     pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
     if bool(pattern.search(a)):
         # 去掉开头的非汉字字符
@@ -354,19 +380,99 @@ def process_string(a):
     else:
         # 去掉开头的非英文字符
         a = re.sub(r'^[^a-zA-Z]+', '', a)
-    # 去掉所有标点符号和特殊字符
-    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
-    a = re.sub(r_str, "_", a)
-    a = validate_title_clean(a)
+
+    pattern_copy = re.compile(r"([a-zA-Z0-9\u4e00-\u9fa5].+)(\([0-9]+\)+)+")
+    match = pattern_copy.match(a)
+    last_part = ''
+    if match:
+        a, last_part = match.groups()
+    a = a + ' ' +  last_part
+
+    # 去除英文标点符号
+    a = re.sub('[{}]'.format(string.punctuation), ' ', a)
+
+    # 去除中文标点符号
+    a = re.sub('[{}]'.format(zhon.hanzi.punctuation), ' ', a)
+
+    # 去除其他
+    r_str = r"\/\\\:\*\?\"\<\>#\.\|\n/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）—+：；《》+~【】"
+    a = re.sub(r_str, " ", a).replace('  ', ' ').strip()
+
     return a
+
+
+def t2s(string_a):
+    converter = OpenCC('t2s')
+    return converter.convert(string_a)
+
 
 def string_similar(s1, s2):
     if s1 == '' or s2 == '':
         return 0
+    s1a = process_string(s1).lower().replace(' ','')
+    s2a = process_string(s2).lower().replace(' ','')
+    if s1a == '' or s2a == '':
+        return 0
+    if s1a == s2a:
+        return 1
+    similara = difflib.SequenceMatcher(None, s1a, s2a).quick_ratio()
+
+    return similara
+
+
+def split_string(input_string):
+    # 去除空格
+    cleaned_string = input_string.replace(" ", "").replace("　", "")
+
+    # 使用正则表达式匹配字母或中文和数字的格式
+    # punctuation_all = string.punctuation + zhon.hanzi.punctuation
+    pattern = re.compile(r"([a-zA-Z\u4e00-\u9fa5]+)([\d（([【《<].+)")
+    match = pattern.match(cleaned_string)
+
+    if match:
+        aaa_part, num_part = match.groups()
+        return aaa_part, num_part
+    else:
+        return None, None
+
+def string_sequence (s1, s2):
     s1 = process_string(s1).lower()
     s2 = process_string(s2).lower()
-    similar = difflib.SequenceMatcher(None, s1, s2).quick_ratio()
-    return similar
+    if s1 == '' or s2 == '' or s1 == s2:
+        return False
+    s1a,s1b = split_string(s1)
+    s2a,s2b = split_string(s2)
+    if s1a and s1b and s2a and s2b and s1a == s2a and s1b != s2b:
+        return True
+    diff = difflib.Differ().compare(s1, s2)
+    if not diff or diff == None:
+        return False
+    for line in diff:
+        if line.startswith('+') or line.startswith('-'):
+            if not line[2:].isnumeric() and line[2:] not in ['上', '中', '下']:
+                return False
+            else:
+                pass
+    return True
+
+def move_file(source_directory, destination_directory, filename):
+    try:
+        # 创建目录c（如果不存在）
+        os.makedirs(destination_directory, exist_ok=True)
+
+        # 源文件的完整路径
+        source_file_path = os.path.join(source_directory, filename)
+
+        # 目标文件的完整路径
+        destination_file_path = os.path.join(destination_directory, filename)
+
+        # 移动文件
+        shutil.move(source_file_path, destination_file_path)
+        # print(f"Moved {source_file_path} to {destination_file_path}")
+
+        # print("File moved successfully!")
+    except Exception as e:
+        print(f"Error moving file: {e}")
 
 def find_files_with_prefix(directory, prefix):
     """
@@ -385,6 +491,7 @@ def find_files_with_prefix(directory, prefix):
             if file.startswith(prefix):
                 matching_files.append(os.path.join(root, file))
     return matching_files
+
 
 def is_exist_files_with_prefix(directory, prefix):
     """
@@ -411,10 +518,12 @@ def guess_media_type(file_name_ext: str):
     #
     #
     # media_type = 'default'
-    # if file_name_ext.startswith('.'):
-    #     file_name_ext = file_name_ext[1:]
-    # #先来一波已知的
-    # if file_name_ext in
+    docu_names = ["mobi", "azw3", "epub", "dox", "txt", "docx", "pdf", "chm", "rar", "7z", "zip"]
+    if file_name_ext.startswith('.'):
+        file_name_ext = file_name_ext[1:]
+
+    if file_name_ext in docu_names:
+        return "document"
 
     if '.' in file_name_ext:
         mime_type, _ = mimetypes.guess_type(f"aaaa{file_name_ext}")
@@ -425,15 +534,15 @@ def guess_media_type(file_name_ext: str):
             media_type =  "video"
         elif mime_type.startswith("audio"):
             media_type = "audio"
-        elif mime_type.startswith("text") or mime_type.startswith("application/pdf") or mime_type.startswith("application/msword"):
+        elif mime_type.startswith("text"):
             media_type = "document"
         elif mime_type.startswith("image"):
             media_type = "photo"
-        elif mime_type.startswith("application/zip"):
-            media_type = "zip"
         else:
             return "default"
-    return mime_type
+    else:
+        return "default"
+    return media_type
 
 def find_missing_files(folder_path, max_number):
     missing_ranges = []
@@ -523,3 +632,5 @@ def get_folder_files_size(folder_path):
             total_size += file_size
             files_count += 1
     return files_count, total_size
+
+

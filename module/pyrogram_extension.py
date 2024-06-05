@@ -900,13 +900,25 @@ def set_meta_data(
     )  # 1 for General
 
     # media
-    for kind in meta_data.AVAILABLE_MEDIA:
-        media_obj = getattr(message, kind, None)
-        if media_obj is not None:
-            meta_data.media_type = kind
-            break
+    if message.audio and message.audio != '':
+        media_obj = message.audio
+        meta_data.media_type = 'audio'
+    elif message.video and message.video != '':
+        media_obj = message.video
+        meta_data.media_type = 'video'
+    elif message.photo and message.photo != '':
+        media_obj = message.photo
+        meta_data.media_type = 'photo'
+    elif message.document and message.document != '':
+        media_obj = message.document
+        meta_data.media_type = 'document'
     else:
         return
+
+    mini_mime_type = getattr(media_obj, 'mime_type', None)
+    # if mini_mime_type and '/' in mini_mime_type:
+    #     print(mini_mime_type)
+
     meta_data.media_file_name = getattr(media_obj, "file_name", None) or ""
     meta_data.media_file_size = getattr(media_obj, "file_size", None)
     meta_data.media_width = getattr(media_obj, "width", None)
