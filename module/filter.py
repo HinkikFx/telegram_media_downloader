@@ -372,7 +372,6 @@ class Filter:
         if 'no_jap_kor' in filter_str:
             no_jap_kor = True
             filter_str = filter_str.replace('no_jap_kor', '').strip()
-
         if self.filter.names:
             res = self.filter.exec(filter_str)
             if isinstance(res, bool):

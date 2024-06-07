@@ -23,7 +23,6 @@ class Link:
     post_id: Optional[int] = None
     comment_id: Optional[int] = None
 
-waste_word_json_file = os.path.join(os.path.abspath("."), "waste_word_json_file.json")
 
 
 def load_waste_word_json(json_file):
@@ -356,12 +355,6 @@ def create_progress_bar(progress, total_bars=10):
     progress_bar = "█" * completed_bars + "░" * remaining_bars
     return progress_bar
 
-def remove_substrings_with_regex(input_str, keyword_list):
-    # 遍历 keyword_list 中的每个元素
-    for element in keyword_list:
-        # 使用 re.sub() 方法将找到的子字符串替换为空字符串
-        input_str = re.sub(element, " ", input_str).replace('  ', ' ')
-    return input_str
 
 def process_string(string_a: str):
     a = string_a
@@ -371,8 +364,24 @@ def process_string(string_a: str):
     elif string_a.lower().endswith('mp4'):
         a = re.sub("mp4", "", a, flags=re.IGNORECASE)
 
-    waste_word = load_waste_word_json(waste_word_json_file)
-    a = remove_substrings_with_regex(a, waste_word)
+    waste_pattern = re.compile(
+        r'【中文.*?】|【18禁.*?】|【3D.*?】|【A_SMR.*?】|【ASMR.*?】|【NJ..*?】|【NTR.*?】|【Q弹一只菊.*?】|【R18.*?】|【sophia喵酱.*?】'
+        r'|【YiyiZi.*?】|【安里.*?】|【安眠.*?】|【白杭芷.*?】|【病娇.*?】|【厂长.*?】|【晨曦.*?】|【纯爱.*?】|【刺猬猫.*?】|【催眠.*?】|【大饼.*?】'
+        r'|【蒂法.*?】|【都市.*?】|【短篇.*?】|【耳边.*?】|【耳机.*?】|【耳语.*?】|【福利.*?】|【付费.*?】|【高考应援.*?】|【哈尼.*?】|【喊麦.*?】'
+        r'|【杭白芷.*?】|【合集.*?】|【哄睡.*?】|【回放.*?】|【即兴.*?】|【剧场.*?】|【剧情.*?】|【剧情.*?】|【咖喱.*?】|【林晓蜜.*?】|【另类.*?】'
+        r'|【乱伦.*?】|【绿奴.*?】|【曼曼.*?】|【猫萝.*?】|【迷鹿.*?】|【蜜婕.*?】|【喵会长.*?】|【喵老师.*?】|【睦之人.*?】|【男性向.*?】|【南锦.*?】'
+        r'|【南星社.*?】|【南征.*?】|【楠兮.*?】|【陪睡.*?】|【桥桥.*?】|【清软喵.*?】|【情感.*?】|【全集.*?】|【群[0-9].*?】|【人妻.*?】|【人头麦.*?】'
+        r'|【桑九.*?】|【闪亮银.*?】|【闪亮银.*?】|【绅士.*?】|【实录.*?】|【是幼情吖.*?】|【兽人.*?】|【双声道.*?】|【睡前故事.*?】|【岁岁.*?】'
+        r'|【桃夭.*?】|【同人.*?】|【完结.*?】|【完整.*?】|【无人声.*?】|【武侠.*?】|【希尔薇.*?】|【闲话家常.*?】|【小剧场.*?】|【小咖喱.*?】'
+        r'|【小咪.*?】|【小墨.*?】|【小苮儿.*?】|【小遥.*?】|【小窈.*?】|【小夜.*?】|【小姨.*?】|【小芸豆.*?】|【校园.*?】|【芯嫒.*?】|【羞耻.*?】'
+        r'|【妍希.*?】|【厌世.*?】|【叶月.*?】|【夜听.*?】|【夜袭.*?】|【葉月.*?】|【音频.*?】|【音声.*?】|【幼情.*?】|【诱耳.*?】|【渔子溪.*?】'
+        r'|【芸汐.*?】|【枕边.*?】|【直播.*?】|【中文.*?】|【助眠.*?】|【紫眸.*?】|【作者..*?】|作者:.*?'
+        r'|Asmr糖七baby|ASMR艺彤酱|ASMR艺彤酱|dear诱耳|阿木木|不详|顾骁梦|酒Whiskey|朗读向|李莎|林三岁-|另类|萝莉一凡|'
+        r'夢冬|南征|清软~喵|清软喵.*?|绅士音声|说人话的吊|小芸豆儿新地点|音声|有声清读|御姐音|芝恩㱏|烛灵儿|（剧情）|奶兮酱|'
+        r'唐樱樱|迷鹿|沐醒醒子|初霸霸|小芸豆|直播|小小奶瓶儿|渔晚|（立体声）|【18+中文音声】|南飞作品',
+        re.IGNORECASE)
+    a = waste_pattern.sub("", a).replace('  ', ' ')
+
     pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
     if bool(pattern.search(a)):
         # 去掉开头的非汉字字符

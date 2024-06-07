@@ -683,15 +683,19 @@ def need_skip_message(message, chat_download_config):
         if not (message.audio or message.video or message.photo or message.document):
             return True
 
-        # Case 2 不符合config文件条件就跳过
-        meta_data = MetaData()
-        set_meta_data(meta_data, message, '')
-        if not app.exec_filter(chat_download_config, meta_data):
-            return True
-
-        # Case 3 数据库记录了已下载或等价已下载就跳过
+        # Case 2 数据库记录了已下载或等价已下载就跳过
         msg_chat_id = 0 - message.chat.id - 1000000000000
         if db.getStatus(msg_chat_id, message.id) in [1, 4]:
+            return True
+
+        # Case 3 不符合config文件条件就跳过 受 media_types file_formats 以及filter 控制
+        meta_data = MetaData()
+        set_meta_data(meta_data, message, '')
+        if meta_data.file_extension and meta_data.file_extension != '' and (
+        not 'all' in app.file_formats[meta_data.media_type]) and (
+                not meta_data.file_extension.replace('.', '').lower() in app.file_formats[meta_data.media_type]):
+            return True
+        if not app.exec_filter(chat_download_config, meta_data):
             return True
 
         # Case 4 文件严格存在就跳过
@@ -744,7 +748,19 @@ async def download_chat_task(
                     if downloading_messages and len(downloading_messages) > 0:
                         try:
                             for message in downloading_messages:
-                                await add_download_task(message, node)
+                                if need_skip_message(message, chat_download_config):
+                                    node.download_status[message.id] = DownloadStatus.SkipDownload
+                                    await upload_telegram_chat(
+                                        client,
+                                        node.upload_user,
+                                        app,
+                                        node,
+                                        message,
+                                        DownloadStatus.SkipDownload,
+                                    )
+                                    continue
+                                else:
+                                    await add_download_task(message, node)
                                 await asyncio.sleep(RETRY_TIME_OUT)
                         except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
                             await asyncio.sleep(wait_err.value)
@@ -759,7 +775,19 @@ async def download_chat_task(
                 if downloading_messages and len(downloading_messages)>0:
                     try:
                         for message in downloading_messages:
-                            await add_download_task(message, node)
+                            if need_skip_message(message, chat_download_config):
+                                node.download_status[message.id] = DownloadStatus.SkipDownload
+                                await upload_telegram_chat(
+                                    client,
+                                    node.upload_user,
+                                    app,
+                                    node,
+                                    message,
+                                    DownloadStatus.SkipDownload,
+                                )
+                                continue
+                            else:
+                                await add_download_task(message, node)
                             await asyncio.sleep(RETRY_TIME_OUT)
                     except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
                         await asyncio.sleep(wait_err.value)
