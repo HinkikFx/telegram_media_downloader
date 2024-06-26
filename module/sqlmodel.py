@@ -5,7 +5,8 @@ from peewee import *
 from datetime import datetime
 from loguru import logger
 from utils import format
-
+from playhouse.shortcuts import model_to_dict
+import re
 
 source_db = os.path.join(os.path.abspath("."), "downloaded.db")
 # memory_db = ":memory:"
@@ -29,6 +30,73 @@ class MsgStatusDB(Enum):
     SkipDownload = 3
     MissingDownload = 4
 
+def get_similar_rate(msg_dict1, msg_dict2, sizerange_min):
+
+    if '.' in msg_dict1.get('filename'):
+        filename1 = msg_dict1.get('filename').split(".")[-2]
+    else:
+        filename1 = msg_dict1.get('filename')
+    filename1 = re.sub(r"^\[\d+\]?", '', filename1).replace(' ', '')
+
+    if '.' in msg_dict2.get('filename'):
+        filename2 = msg_dict2.get('filename').split(".")[-2]
+    else:
+        filename2 = msg_dict2.get('filename')
+    filename2 = re.sub(r"^\[\d+\]?", '', filename2).replace(' ', '')
+
+    title1 = msg_dict1.get('title').replace(' ', '')
+    title2 = msg_dict2.get('title').replace(' ', '')
+
+    similar = 0
+
+    break_all = False
+    if filename1 == title1:
+        nameas = [filename1]
+    else:
+        nameas = [filename1, title1]
+    if filename2 == title2:
+        namebs = [filename2]
+    else:
+        namebs = [filename2, title2]
+    for namea in nameas:
+        if break_all:
+            break
+        for nameb in namebs:
+            if format.string_sequence(namea, nameb):  # 是一个文件序列
+                break_all = True
+                similar = 0
+                break
+
+            sim_num = format.string_similar(namea, nameb)
+            if sim_num == 1:
+                similar = 1
+                break_all = True
+                break
+
+            # 补充情况1 文件名是包含关系 且大小时长都很相似 文件名相似度可以打8折即 扩张为125%
+            namea1 = format.process_string(namea).replace(' ', '')
+            nameb1 = format.process_string(nameb).replace(' ', '')
+            if namea1 != '' and nameb1 != '' and (namea1 in nameb1 or nameb1 in namea1) and msg_dict1.get(
+                    'mime_type') == msg_dict2.get(
+                'mime_type') and msg_dict1.get('media_size') > 0 and math.isclose(
+                msg_dict1.get('media_size'),
+                msg_dict2.get('media_size'),
+                rel_tol=sizerange_min) and msg_dict1.get('media_duration') > 0 and math.isclose(
+                msg_dict1.get('media_duration'), msg_dict2.get('media_duration'),
+                rel_tol=sizerange_min):  # 文件名是包含关系 且大小时长都很相似
+                sim_num = sim_num * 1.25
+
+            # 补充情况2 文件大小完全一致 文件类型完全一致 文件名相似度可以打8折即 扩张为125%
+            elif msg_dict1.get('mime_type') == msg_dict2.get('mime_type') and msg_dict1.get(
+                    'media_size') > 0 and msg_dict1.get('media_size') == msg_dict2.get('media_size'):
+                sim_num = sim_num * 1.25
+
+            if similar < sim_num:
+                similar = sim_num
+
+    return similar
+
+
 
 class Downloaded(BaseModel):
     id = AutoField(primary_key=True, column_name='ID', null=True)
@@ -44,19 +112,12 @@ class Downloaded(BaseModel):
     chat_username = CharField(max_length=200, column_name='CHAT_USERNAME')
     chat_title = CharField(max_length=200, column_name='CHAT_TITLE', null=True)
     addtime = CharField(max_length=200, column_name='ADDTIME', null=True)
+    msg_type = CharField(max_length=200, column_name='TYPE', null=True) #
+    msg_link = CharField(max_length=200, column_name='LINK', null=True)  #
     status = IntegerField(column_name='STATUS') #
-    type = CharField(max_length=200, column_name='TYPE', null=True) #
 
     class Meta:
         table_name = 'Downloaded'
-
-    def create_table(table):
-        u"""
-        如果table不存在，新建table
-        """
-        if not table.table_exists():
-            table.create_table()
-
 
     def getMsg(self, chat_username: str, message_id: int, status = 1, chat_id: int =None):
         if db.autoconnect == False:
@@ -116,7 +177,7 @@ class Downloaded(BaseModel):
                             return downloaded.status  # 说明存在此条数据
                     except DoesNotExist:
                         return 0
-        return 0 #0为不存在 1未已完成 2为下载中 3为跳过未系在 4为下载后丢失
+        return 0 #0为不存在 1未已完成 2为下载中 3 暂时未使用 4为等效已下载
 
     def msg_insert_to_db(self, dictit :dict):
         if db.autoconnect == False:
@@ -144,8 +205,9 @@ class Downloaded(BaseModel):
             downloaded.chat_username = dictit['chat_username']
             downloaded.chat_title = dictit['chat_title']
             downloaded.addtime = datetime.now().strftime("%Y-%m-%d %H:%M")
+            downloaded.msg_type = dictit['msg_type']
+            downloaded.msg_link = dictit['msg_link']
             downloaded.status = dictit['status']
-            downloaded.type = dictit['msg_type']
             downloaded.save()
             # db.close()
             return True
@@ -178,17 +240,13 @@ class Downloaded(BaseModel):
                 downloaded.chat_title = dictit['chat_title']
                 downloaded.addtime = datetime.now().strftime("%Y-%m-%d %H:%M")
                 downloaded.status = dictit['status']
-                downloaded.type = dictit['msg_type']
+                downloaded.msg_type = dictit['msg_type']
+                downloaded.msg_link = dictit['msg_link']
                 downloaded.save()
                 # db.close()
                 return True
         except DoesNotExist:
             return False
-        try:
-            # 出错说明不存在此条数据，需写入
-            downloaded = Downloaded()
-
-            return True
         except Exception as e:
             logger.error(
                 f"[{e}].",
@@ -244,15 +302,21 @@ class Downloaded(BaseModel):
 
 
 
-    def get_similar_files(self, msgdict, similar_min: float, sizerange_min: float):
+    def get_similar_files(self, msgdict, similar_min: float, sizerange_min: float, status: list = []): #返回结果均不包含自己
         similar_file_list = []
         if db.autoconnect == False:
             db.connect()
         try:
-            status_acc= [1,2] #完成下载或正在下载
+            if len(status) == 0:
+                status_acc= [1] #只找完成下载的
+            else:
+                status_acc = status
+
+            # if msgdict.get('msg_link') == 'https://t.me/TG672/2282':
+            #     print ('debug')
 
             # 判断依据Step1.2： 找出类型一致 大小完全一致的文件记录
-            result2 = Downloaded.select().where(Downloaded.mime_type == msgdict.get('mime_type'),
+            result1 = Downloaded.select().where(Downloaded.mime_type == msgdict.get('mime_type'),
                                                    Downloaded.media_size== msgdict.get('media_size'),
                                                    Downloaded.status.in_(status_acc))
 
@@ -264,77 +328,35 @@ class Downloaded(BaseModel):
                 filename = os.path.splitext(msgdict.get('filename'))[-2]
 
             file_core_name = format.process_string(filename)
-            if not file_core_name or file_core_name =='' or len(file_core_name) <= 4:
-                file_core_name = format.validate_title_clean(filename)
+            if file_core_name and len(file_core_name) >= 4:
+                result2 = Downloaded.select().where(Downloaded.mime_type == msgdict.get('mime_type'),
+                                                    (Downloaded.filename % f'*{file_core_name.replace(" ", "*")}*' | Downloaded.title % f'*{file_core_name.replace(" ", "*")}*'),
+                                                    Downloaded.media_size.between(
+                                                        media_size_1, media_size_2),
+                                                    Downloaded.status.in_(status_acc))
 
-            result3 = Downloaded.select().where(Downloaded.mime_type == msgdict.get('mime_type'),
-                                                (
-                                                            Downloaded.filename % f'*{file_core_name.replace(" ", "*")}*' | Downloaded.title % f'*{file_core_name.replace(" ", "*")}*'),
-                                                Downloaded.media_size.between(
-                                                    media_size_1, media_size_2),
-                                                Downloaded.status.in_(status_acc))
-
-            # 判断依据Step1.4： 找出文档类型 文件名完全一致的文件记录
-            result4 = Downloaded.select().where(Downloaded.type == msgdict.get('msg_type'),
-                                                (
-                                                            Downloaded.filename % f'*{file_core_name.replace(" ", "*")}*' | Downloaded.title % f'*{file_core_name.replace(" ", "*")}*'),
-                                                Downloaded.status.in_(status_acc))
+                # 判断依据Step1.4： 找出文档类型 文件名完全一致的文件记录
+                result3 = Downloaded.select().where(Downloaded.msg_type == msgdict.get('msg_type'),
+                                                    (Downloaded.filename % f'*{file_core_name.replace(" ", "*")}*' | Downloaded.title % f'*{file_core_name.replace(" ", "*")}*'),
+                                                    Downloaded.status.in_(status_acc))
 
 
 
-            downloaded = result2.union(result3).union(result4)
-            if len(downloaded) >= 10:
-                print('debug')
-            # 判断依据Step2： 判断文件名是否接近
+                downloaded = result1.union(result2).union(result3)
+            else:
+                downloaded = result1
+            if len(downloaded) > 20:
+                print(f'debug：{file_core_name}')
             for record in downloaded:
                 if record.chat_id == msgdict.get('chat_id') and record.message_id == msgdict.get('message_id'): # 是自己
-                    if record.status == 1:  # 如果是已完成状态 直接加入列表
-                        similar_file_list.append(record)
-                    else:
-                        continue # 如果是未完成状态 则跳过
+                    # if record.status == 1:  # 如果是已完成状态 直接加入列表
+                    #     similar_file_list.append(record)
+                    # else:
+                    #     continue # 如果是未完成状态 则跳过
+                    continue
                 else: # 不是自己 判断文件名是否接近
-                    if '.' in msgdict.get('filename'):
-                        filename = msgdict.get('filename').split(".")[-2]
-                    else:
-                        filename = msgdict.get('filename')
-                    if '.' in record.filename:
-                        filename_db = record.filename.split(".")[-2]
-                    else:
-                        filename_db = record.filename
-                    title_db = record.title
-                    similar = 0
-                    break_all = False
-                    for namea in [filename_db, title_db]:
-                        if break_all:
-                            break
-                        for nameb in [filename, msgdict.get('title')]:
-                            if format.string_sequence(namea, nameb):  # 是一个文件序列
-                                break_all = True
-                                similar = 0
-                                break
-
-                            sim_num = format.string_similar(namea, nameb)
-                            if sim_num == 1:
-                                similar = 1
-                                break_all = True
-                                break
-
-                            namea1 = format.process_string(namea).replace(' ', '')
-                            nameb1 = format.process_string(nameb).replace(' ', '')
-                            if namea1 !='' and nameb1 !='' and (namea1 in nameb1 or nameb1 in namea1) and msgdict.get(
-                                    'mime_type') == record.mime_type and msgdict.get('media_size') > 0 and math.isclose(
-                                msgdict.get('media_size'),
-                                record.media_size,
-                                rel_tol=sizerange_min) and msgdict.get('media_duration') > 0 and math.isclose(
-                                msgdict.get('media_duration'), record.media_duration,
-                                rel_tol=sizerange_min):  # 文件名是包含关系 且大小时长都很相似
-                                similar = 1
-                                break_all = True
-                                break
-
-                            if similar < sim_num:
-                                similar = sim_num
-                    if similar >= similar_min:  # 名字高于相似度阈值
+                    similar = get_similar_rate(msgdict, model_to_dict(record), sizerange_min)
+                    if similar >= similar_min: # 名字高于相似度阈值
                         similar_file_list.append(record)
                         continue
             # db.close()

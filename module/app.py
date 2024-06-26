@@ -374,7 +374,7 @@ class Application:
         self.restart_program = False
         self.config: dict = {}
         self.app_data: dict = {}
-        self.file_path_prefix: List[str] = ["chat_title", "media_datetime"]
+        self.file_path_prefix: List[str] = []
         self.file_name_prefix: List[str] = ["message_id", "file_name"]
         self.file_name_prefix_split: str = ""
         self.log_file_path = os.path.join(os.path.abspath("."), "log")
@@ -382,10 +382,10 @@ class Application:
         self.cloud_drive_config = CloudDriveConfig()
         self.hide_file_name = False
         self.caption_name_dict: dict = {}
-        self.max_concurrent_transmissions: int = 1
+        self.max_concurrent_transmissions: int = 2
         self.web_host: str = "0.0.0.0"
         self.web_port: int = 5000
-        self.max_download_task: int = 5
+        self.max_download_task: int = 2
         self.language = Language.EN
         self.after_upload_telegram_delete: bool = True
         self.web_login_secret: str = ""
@@ -397,6 +397,7 @@ class Application:
         )
         self.date_format: str = "%Y-%m"
         self.drop_no_audio_video: bool = False
+        self.if_retry: bool = True
 
         self.forward_limit_call = LimitCall(max_limit_call_times=33)
         self.loop = asyncio.new_event_loop()
@@ -432,6 +433,8 @@ class Application:
         self.file_formats = _config["file_formats"]
 
         self.hide_file_name = _config.get("hide_file_name", False)
+
+        self.if_retry = _config.get("if_retry", True)
 
         # option
         if _config.get("proxy"):
@@ -627,39 +630,13 @@ class Application:
     def get_file_save_path(
         self, media_type: str, chat_title: str, media_datetime: str
     ) -> str:
-        """Get file save path prefix.
 
-        Parameters
-        ----------
-        media_type: str
-            see config.yaml media_types
+        try:
+            res = self.save_path.get(media_type)
+        except Exception as e:
+            pass
 
-        chat_title: str
-            see channel or group title
-
-        media_datetime: str
-            media datetime
-
-        Returns
-        -------
-        str
-            file save path prefix
-        """
-        res: str = ''
-
-        chat_id, chat_username = chat_title.replace('[','').split(']')
-        if chat_username and self.chat_download_config.get(chat_username):
-            chat_group = self.chat_download_config.get(chat_username).group
-            if chat_group and chat_group !='': #如果chat_group 分组存在 则按照分组保存到不同的路径 如果不存在则按照媒体类型保存到不同的路径
-                res = self.save_path.get(chat_group)
-
-        if not res or res == '':
-            if self.save_path.get(media_type):
-                res = self.save_path.get(media_type)
-            else:
-                return None
-
-        if res and res !='':
+        if res and res != '':
             for prefix in self.file_path_prefix:
                 if prefix == "chat_title":
                     res = os.path.join(res, chat_title)
@@ -667,7 +644,10 @@ class Application:
                     res = os.path.join(res, media_datetime)
                 elif prefix == "media_type":
                     res = os.path.join(res, media_type)
-        return res
+            return res
+        else:
+            return self.get_file_save_path('default', chat_title, media_datetime)
+
 
         # update by mouxmoux
         # 修改保存文件夹路径
@@ -852,28 +832,29 @@ class Application:
             if config:
                 self.config = config
                 self.assign_config(self.config)
+        if self.config.get('if_retry'):
+            retrys = db.load_retry_msg_from_db()
+            if retrys:
+                for chat in retrys:
+                    if chat.get('chat_username') and chat.get('chat_username') !='':
+                        chat_id_aka = chat.get('chat_username')
+                    else:
+                        chat_id_aka = chat.get('chat_id')
+                    if not chat_id_aka in self.chat_download_config:
+                        self.chat_download_config[chat_id_aka] = ChatDownloadConfig()
+                        self.chat_download_config[chat_id_aka].last_read_message_id = 9999999
+                        self.chat_download_config[chat_id_aka].download_filter = ''
+                        self.chat_download_config[chat_id_aka].upload_telegram_chat_id = None
+                        self.chat_download_config[chat_id_aka].group = None
 
-        retrys = db.load_retry_msg_from_db()
-        if retrys:
-            for chat in retrys:
-                if chat.get('chat_username') and chat.get('chat_username') !='':
-                    chat_id_aka = chat.get('chat_username')
-                else:
-                    chat_id_aka = chat.get('chat_id')
-                if not chat_id_aka in self.chat_download_config:
-                    self.chat_download_config[chat_id_aka] = ChatDownloadConfig()
-                    self.chat_download_config[chat_id_aka].last_read_message_id = 9999999
-                    self.chat_download_config[chat_id_aka].download_filter = ''
-                    self.chat_download_config[chat_id_aka].upload_telegram_chat_id = None
-                    self.chat_download_config[chat_id_aka].group = None
-
-                self.chat_download_config[chat_id_aka].ids_to_retry = chat.get('ids_to_retry', [])
-                for it_str in self.chat_download_config[chat_id_aka].ids_to_retry:
-                    it = int(it_str)
-                    self.chat_download_config[chat_id_aka].ids_to_retry_dict[
-                        it
-                    ] = True
-
+                    self.chat_download_config[chat_id_aka].ids_to_retry = chat.get('ids_to_retry', [])
+                    for it_str in self.chat_download_config[chat_id_aka].ids_to_retry:
+                        it = int(it_str)
+                        self.chat_download_config[chat_id_aka].ids_to_retry_dict[
+                            it
+                        ] = True
+        else:
+            retrys = []
 
         return
 

@@ -5,14 +5,15 @@ import os
 import shutil
 import time
 import re
+from enum import Enum
 from typing import List, Optional
 
 import pyrogram
 from loguru import logger
 from rich.logging import RichHandler
 
-from datetime import datetime
-from apscheduler.schedulers.blocking import BlockingScheduler
+from typing import AsyncGenerator, Optional, Union
+
 from tqdm.asyncio import tqdm
 
 from module.app import Application, ChatDownloadConfig, DownloadStatus, TaskNode
@@ -23,7 +24,6 @@ from module.language import _t
 from module.pyrogram_extension import (
     HookClient,
     fetch_message,
-    get_extension,
     record_download_status,
     report_bot_download_status,
     set_max_concurrent_transmissions,
@@ -33,11 +33,11 @@ from module.pyrogram_extension import (
 from module.web import init_web
 
 from utils.format import (
-    truncate_filename,
+
     validate_title,
     process_string,
     find_files_with_prefix,
-    guess_media_type,
+
     find_missing_files,
     merge_files_cat,
     merge_files_write,
@@ -63,7 +63,7 @@ DATA_FILE_NAME = "data.yaml"
 APPLICATION_NAME = "media_downloader"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 
-queue_maxsize = 0
+queue_maxsize = 100
 queue: asyncio.Queue = asyncio.Queue(maxsize = queue_maxsize)
 
 RETRY_TIME_OUT = 3
@@ -80,6 +80,7 @@ logging.getLogger("pyrogram.client").addFilter(LogFilter())
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
 db = sqlmodel.Downloaded()
+
 
 def check_download_finish(media_size: int, download_path: str, ui_file_name: str, chunk_count: int):
     files_count, total_size = get_folder_files_size(download_path)
@@ -107,110 +108,83 @@ def merge_chunkfile(folder_path: str, output_file: str, chunk_count: int, file_s
         os.remove(output_file)
         return False
 
-
-
 def _check_timeout(retry: int, _: int):
 
     if retry >= 4:
         return True
     return False
 
-
-def get_aka_file_dir(msg_dict):
-
-    file_type = msg_dict.get('msg_type')
-
-    if not msg_dict.get('chat_username'):
-        subdir = validate_title(f"[{str(msg_dict.get('chat_id'))}]{msg_dict.get('chat_id')}")
-    else:
-        subdir = validate_title(f"[{str(msg_dict.get('message_id'))}]{msg_dict.get('chat_id')}")
-
-    file_dir = app.get_file_save_path(file_type, subdir, '')
-
-    return file_dir
-
-def get_exist_files(msg_dict: dict) -> list:
-    file_dir = get_aka_file_dir(msg_dict)
-    file_path = os.path.join(file_dir, f"{msg_dict.get('filename')}")
-    if _is_exist(file_path):
-        return file_path
-
-
-def get_exist_files_aks_by_path(file_path) -> list:
-    file_dir, filename = os.path.split(file_path)
-    filename_pre = re.findall(r"\[.+?\]", filename)[0]
-    aka_files = find_files_with_prefix(file_dir, filename_pre)
-    if file_path in aka_files:
-        aka_files.remove(file_path)
-    return aka_files
-
-def get_exist_files_aka(msgdict: dict) -> list:
-    file_path = msgdict.get('file_fullname')
-    return get_exist_files_aks_by_path(file_path)
-
-def get_exist_files_forward(msgdict: dict) -> list:
-    forword_files = []
-    if msgdict.get('msg_from'):  # 判读转发源文件是否存在
-        _, from_file_path, _ = get_media_info_str(msgdict.get('msg_from_chat_username'),
-                                                  msgdict.get('msg_from_chat_id'),
-                                                  msgdict.get('msg_from_message_id'),
-                                                  re.sub(r"^\[\d+\]", "", msgdict.get('filename')),
-                                                  msgdict.get('caption'),
-                                                  msgdict.get('msg_type'))  # 生成个名字
-        if from_file_path:
-            if _is_exist(from_file_path):
-                forword_files.append(from_file_path)
-            forword_aka_files = get_exist_files_aks_by_path(from_file_path)
-            if forword_aka_files:
-                forword_files.extend(forword_aka_files)
-            return forword_files
-        else:
-            print('怎么回事！没有生成路径！')
-    else:
-        return None
-
-
-def get_exist_files_db(msgdict: dict):
-    similar_files =  db.get_similar_files(msgdict,similar_set,sizerange_min)
-    return similar_files
-
-
 def _is_exist(file_path: str) -> bool:
     return not os.path.isdir(file_path) and os.path.exists(file_path)
 
+class Msg_db_Status(Enum):
+
+    DB_No_Exist = 0 # 数据库中不存在
+    DB_Exist = 1 # 数据库中存在
+    DB_Downloading = 2  # 数据库中下载中
+    DB_Aka_Exist = 3 # 数据库中等价内容存在
+    DB_Aka_Downloading = 4  # 数据库中等价内容下载中
+    DB_Passed = 5  # 数据库中等价内容存在
+
+class Msg_file_Status(Enum):
+
+    File_No_Exist = 0 # 文件系统中不存在
+    File_Exist = 1 # 文件系统中存在
+    File_Aka_Exist = 2  # 文件系统中等价文件存在
+
+def _get_msg_db_status(msg_dict: dict) :
+
+    msg_chat_id = msg_dict.get('chat_id')
+    try:
+        msg_db_status = db.getStatus(msg_chat_id, msg_dict.get('message_id'))
+    except Exception as e:
+        logger.error(
+            f"[{e}].",
+            exc_info=True,
+        )
+
+    if msg_db_status == 0: #数据库里没这条数据
+        db_files = db.get_similar_files(msg_dict,similar_set,sizerange_min,[1,2]) #看看是否有等价内容数据 4因为依附于1 暂时不管
+        if db_files and len(db_files) >= 1:
+            for db_file in db_files:
+                if db_file.status == 1 or db_file.status == 4: #等价存在
+                    msg_db_status = Msg_db_Status.DB_Aka_Exist
+                    break
+                elif db_file.status == 2: #等价下载中
+                    msg_db_status = Msg_db_Status.DB_Aka_Downloading
+                    break
+        else:
+            msg_db_status = Msg_db_Status.DB_No_Exist
+    elif msg_db_status == 1:
+        msg_db_status = Msg_db_Status.DB_Exist
+    elif msg_db_status == 2:
+        msg_db_status = Msg_db_Status.DB_Downloading
+    elif msg_db_status == 4:
+        msg_db_status = Msg_db_Status.DB_Aka_Exist
+    elif msg_db_status == 3:
+        msg_db_status = Msg_db_Status.DB_Passed
+
+
+    return msg_db_status
+
+def _get_msg_file_status(msg_dict: dict) :
+
+    if _is_exist(msg_dict.get('file_fullname')):
+        msg_file_status = Msg_file_Status.File_Exist #文件存在
+    else:
+        file_dir = os.path.dirname(msg_dict.get('file_fullname'))
+        filename_pre = f"[{msg_dict.get('message_id')}]"
+        files = find_files_with_prefix(file_dir, filename_pre)
+        if files and len(files)>=1:
+            msg_file_status = Msg_file_Status.File_Exist #文件存在
+        else:
+            msg_file_status = Msg_file_Status.File_No_Exist #文件不存在
+
+    return msg_file_status
+
+
+
 # pylint: disable = R0912
-def get_media_info_str(msg_chat_username: str, msg_chat_id: int, msg_message_id: int, msg_filename: str, msg_caption: str, media_type: str):
-
-    if msg_filename and msg_filename != '':
-        msg_file_onlyname, msg_file_ext= os.path.splitext(msg_filename)
-    else:
-        msg_file_onlyname = 'No_Name'
-        msg_file_ext = '.unknown'
-
-    if msg_caption and msg_caption != '' and msg_filename and (
-            'telegram' in msg_filename.lower() or re.sub(r'[._\-\s]', '',
-                                                         msg_file_onlyname).isdigit()):
-        msg_filename = app.get_file_name(msg_message_id,
-                                         f"{msg_caption}{msg_file_ext}",
-                                         msg_caption)
-    else:
-        msg_filename = validate_title(app.get_file_name(msg_message_id, msg_filename, msg_caption))
-
-    if not msg_chat_username:
-        dirname = validate_title(f"[{str(msg_chat_id)}]{msg_chat_id}")
-    else:
-        dirname = validate_title(f"[{str(msg_chat_id)}]{msg_chat_username}")
-
-    file_save_path = os.path.join(app.get_file_save_path(media_type, dirname, ''),
-                                  str(int(msg_message_id) // 100 * 100).zfill(6))
-    temp_save_path = os.path.join(app.temp_save_path, dirname,
-                                  str(int(msg_message_id) // 100 * 100).zfill(6))
-
-    file_save_url = os.path.join(file_save_path, truncate_filename(msg_filename))
-    temp_save_url = os.path.join(temp_save_path, truncate_filename(msg_filename))
-
-    return msg_filename, file_save_url, temp_save_url
-
 def _get_media_meta(
     message: pyrogram.types.Message
 ) -> dict:
@@ -219,15 +193,16 @@ def _get_media_meta(
     msg_time = ''
 
     try:
-        msg_from = False  # 是否转发的信息
         if message.chat.id < 0:
             msg_real_chat_id = 0 - message.chat.id - 1000000000000
         else:
             msg_real_chat_id = message.chat.id
+
         msg_real_chat_username = message.chat.username
         msg_real_message_id = message.id
-        msg_real_chat_title = message.chat.title
+        msg_real_chat_title = validate_title(message.chat.title)
 
+        msg_from = False  # 是否转发的信息
         if message.forward_from_chat and message.forward_from_chat.id and message.forward_from_message_id:
             msg_from_chat_id = 0 - message.forward_from_chat.id - 1000000000000
             msg_from_chat_username = message.forward_from_chat.username
@@ -238,11 +213,10 @@ def _get_media_meta(
         if message.date:
             msg_time = message.date.strftime("%Y-%m-%d %H:%M")
 
-        msg_caption = getattr(message, "caption", '')
+        msg_caption = process_string(validate_title(getattr(message, "caption", '')))
         msg_media_group_id = getattr(message, "media_group_id", None)
 
         if msg_caption:
-            msg_caption = validate_title(msg_caption)
             app.set_caption_name(msg_real_message_id, msg_media_group_id, msg_caption)
         else:
             msg_caption = app.get_caption_name(msg_real_message_id, msg_media_group_id)
@@ -252,15 +226,11 @@ def _get_media_meta(
             msg_filename = message.audio.file_name
             msg_duration = message.audio.duration
             msg_size = message.audio.file_size
-            msg_file_ext = os.path.splitext(message.audio.file_name)[-1][1:]
-            msg_title = ''
         elif message.video and message.video != '':
             msg_type = 'video'
             msg_filename = message.video.file_name
             msg_duration = message.video.duration
             msg_size = message.video.file_size
-            msg_file_ext = os.path.splitext(message.video.file_name)[-1][1:]
-            msg_title = ''
         elif message.photo and message.photo != '':
             msg_type = 'photo'
             if not msg_real_chat_username:
@@ -269,32 +239,46 @@ def _get_media_meta(
                 msg_filename = f"[{msg_real_chat_username}]{msg_real_message_id}.jpg"
             msg_duration = 0
             msg_size = message.photo.file_size
-            msg_file_ext = os.path.splitext(msg_filename)[-1][1:]
-            msg_title = ''
         elif message.document and message.document != '':
             msg_type = 'document'
             msg_filename = message.document.file_name
             msg_duration = 0
             msg_size = message.document.file_size
-            msg_file_ext = os.path.splitext(message.document.file_name)[-1][1:]
-            msg_title = ''
         else:
-            msg_type = 'unknown'
             logger.info(
                 f"无需处理的媒体类型: ",
                 exc_info=True,
             )
             return None
 
-        msg_filename, file_save_url, temp_save_url = get_media_info_str(msg_real_chat_username, msg_real_chat_id, msg_real_message_id, msg_filename, msg_caption, msg_type)
-
-        if not msg_title or msg_title == '':
-            if '.' in msg_filename:
-                msg_title = process_string(os.path.splitext(msg_filename)[-2])
-            else:
-                msg_title = process_string(os.path.splitext(msg_filename)[0])
+        if msg_filename and msg_filename != '':
+            msg_file_onlyname, msg_file_ext = os.path.splitext(msg_filename)
         else:
-            msg_title = process_string(msg_title)
+            msg_file_onlyname = 'No_Name'
+            msg_file_ext = '.unknown'
+
+        msg_file_ext = msg_file_ext.replace('.','')
+
+        if msg_caption and msg_caption != '' and msg_filename and (
+                'telegram' in msg_filename.lower() or re.sub(r'[._\-\s]', '',
+                                                             msg_file_onlyname).isdigit()):
+            msg_filename = app.get_file_name(msg_real_message_id,
+                                             f"{msg_caption}{msg_file_ext}",
+                                             msg_caption)
+        else:
+            msg_filename = validate_title(app.get_file_name(msg_real_message_id, msg_filename, msg_caption))
+
+        msg_title = process_string(msg_file_onlyname)
+
+        if not msg_real_chat_username or msg_real_chat_username == '':
+            subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_id}")
+        else:
+            subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_username}")
+
+        subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
+
+        file_save_url = os.path.join(app.get_file_save_path(msg_type, msg_real_chat_title, msg_time), subdir, msg_filename)
+        temp_save_url = os.path.join(app.temp_save_path, subdir, msg_filename)
 
         if not msg_filename or 'None' in file_save_url:
             if not msg_real_chat_username:
@@ -322,7 +306,8 @@ def _get_media_meta(
                 'msg_from_chat_username': msg_from_chat_username,
                 'msg_from_message_id': msg_from_message_id,
                 'msg_from_chat_title': msg_from_chat_title,
-                'msg_type': msg_type
+                'msg_type': msg_type,
+                'msg_link': message.link
             }
         else:
             media_dict = {
@@ -339,7 +324,8 @@ def _get_media_meta(
                 'chat_title': msg_real_chat_title,
                 'file_fullname': file_save_url,
                 'temp_file_fullname': temp_save_url,
-                'msg_type': msg_type
+                'msg_type': msg_type,
+                'msg_link': message.link
             }
     except Exception as e:
         logger.error(
@@ -354,24 +340,26 @@ def _get_media_meta(
 
 async def add_download_task(
     message: pyrogram.types.Message,
+    msg_dict: dict,
     node: TaskNode,
 ):
+    if message.empty:
+        return False
 
-    media_dict = _get_media_meta(message)
-    media_size = media_dict.get('media_size')
+    if not msg_dict or msg_dict == None:
+        msg_dict = _get_media_meta(message)
 
-    if not media_dict.get('chat_username') or media_dict.get('chat_username') == '':
-        show_chat_username = str(media_dict.get('chat_id'))
+    if not msg_dict.get('chat_username') or msg_dict.get('chat_username') == '':
+        show_chat_username = str(msg_dict.get('chat_id'))
     else:
-        show_chat_username = media_dict.get('chat_username')
+        show_chat_username = msg_dict.get('chat_username')
 
     node.download_status[message.id] = DownloadStatus.Downloading
     await queue.put((message, node))
-    await update_download_status_simple(0, media_size, message.id, media_dict.get('filename'), time.time(),show_chat_username)
     # 写入数据库 记录进入下载队列
-    media_dict['status'] = 2  # 2 下载中
-    insert_into_db(media_dict)
-    logger.info(f"加入队列[{show_chat_username}]{media_dict.get('filename')}   当前队列长：{queue.qsize()}")
+    msg_dict['status'] = 2  # 2 下载中
+    insert_into_db(msg_dict)
+    logger.info(f"加入队列[{show_chat_username}]{msg_dict.get('filename')}   当前队列长：{queue.qsize()}")
     node.total_task += 1
 
     return True
@@ -379,11 +367,8 @@ async def add_download_task(
 async def download_task(
     client: pyrogram.Client, message: pyrogram.types.Message, node: TaskNode
 ):
-    """Download and Forward media"""
 
-    download_status, file_name = await download_media(
-        client, message, app.media_types, app.file_formats, node
-    )
+    download_status, file_name = await download_media(client, message, node)
 
     if not node.bot:
         app.set_download_id(node, message.id, download_status)
@@ -454,18 +439,21 @@ def save_chunk_to_file(chunk, file_path, file_name):
 async def download_media(
     client: pyrogram.client.Client,
     message: pyrogram.types.Message,
-    media_types: List[str],
-    file_formats: dict,
     node: TaskNode,
 ):
+    msg_dict = _get_media_meta(message)
+
+    if _get_msg_file_status(msg_dict) == Msg_file_Status.File_Exist:
+        await update_download_status(msg_dict.get('media_size'), msg_dict.get('media_size'), message.id, msg_dict.get('filename'),
+                                     time.time(),
+                                     node, client)
+        msg_dict['status'] = 1
+        insert_into_db(msg_dict)
+
+        return DownloadStatus.SuccessDownload, msg_dict.get('filename')
+
     task_start_time: float = time.time()
     _media = None
-    try:
-        message = await fetch_message(client, message)
-    except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
-        await asyncio.sleep(wait_err.value)
-    except Exception as e:
-        logger.exception(f"{e}")
 
     media_dict = _get_media_meta(message)
     message_id = media_dict.get('message_id')
@@ -486,11 +474,11 @@ async def download_media(
         ui_file_name = f"****{os.path.splitext(file_name.split('/')[0])}"
 
 
-    for retry in range(1):
+    for retry in range(3):
         try:
             temp_file_path = os.path.dirname(temp_file_name)
             chunk_dir = f"{temp_file_path}/{message_id}_chunk"
-            logger.info(f"开始下载[{show_chat_username}]{media_dict.get('filename')}...")
+            # logger.info(f"开始下载[{show_chat_username}]{media_dict.get('filename')}...")
 
             if media_size < 1024 * 1024 * CHUNK_MIN: # 小于CHUNK_MIN M的就用单一文件下载
                 chunk_count = 1
@@ -499,19 +487,38 @@ async def download_media(
                     shutil.rmtree(chunk_dir)
 
                 os.makedirs(chunk_dir, exist_ok=True)
-
-                temp_download_path = await client.download_media(
-                    message,
-                    file_name=chunk_filename,
-                    progress=update_download_status,
-                    progress_args=(
-                        message_id,
-                        ui_file_name,
-                        task_start_time,
-                        node,
-                        client,
-                    ),
-                )
+                try:
+                    await client.download_media(
+                        message,
+                        file_name=chunk_filename,
+                        progress=update_download_status,
+                        progress_args=(
+                            message_id,
+                            ui_file_name,
+                            task_start_time,
+                            node,
+                            client,
+                        ),
+                    )
+                except pyrogram.errors.exceptions.bad_request_400.BadRequest:
+                    logger.warning(
+                        f"[{show_chat_username}]{message_id}: {_t('file reference expired, refetching')}..."
+                    )
+                    await asyncio.sleep(RETRY_TIME_OUT)
+                    message = await fetch_message(client, message)
+                    if _check_timeout(retry, message_id):
+                        # pylint: disable = C0301
+                        logger.error(
+                            f"[{show_chat_username}]{message_id}]: "
+                            f"{_t('file reference expired for 3 retries, download skipped.')}"
+                        )
+                except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
+                    await asyncio.sleep(wait_err.value)
+                    logger.warning(f"[{show_chat_username}]: FlowWait ", message_id, wait_err.value)
+                    _check_timeout(retry, message_id)
+                except Exception as e:
+                    logger.exception(f"{e}")
+                    pass
             else: #大文件 采用分快下载模式
                 if not os.path.exists(chunk_dir):
                     os.makedirs(chunk_dir, exist_ok=True)
@@ -565,32 +572,16 @@ async def download_media(
                     try:
                         if merge_chunkfile(folder_path=chunk_dir, output_file=file_name, chunk_count=chunk_count,
                                         file_size=media_size, method='shutil'):
-                            await asyncio.sleep(RETRY_TIME_OUT)
+                            # await asyncio.sleep(RETRY_TIME_OUT)
                             if _is_exist(file_name) and os.path.getsize(file_name) == media_size:
                                 shutil.rmtree(chunk_dir)
 
                             media_dict['status'] = 1
                             insert_into_db(media_dict)
 
-                            logger.success(f"完成下载[{show_chat_username}]{message_id}{media_dict.get('filename')}...")
+                            logger.success(f"完成下载{file_name}...剩余：{queue.qsize()}")
 
                             return DownloadStatus.SuccessDownload, file_name
-                    except pyrogram.errors.exceptions.bad_request_400.BadRequest:
-                        logger.warning(
-                            f"[{show_chat_username}]{message_id}: {_t('file reference expired, refetching')}..."
-                        )
-                        await asyncio.sleep(RETRY_TIME_OUT)
-                        message = await fetch_message(client, message)
-                        if _check_timeout(retry, message_id):
-                            # pylint: disable = C0301
-                            logger.error(
-                                f"[{show_chat_username}]{message_id}]: "
-                                f"{_t('file reference expired for 3 retries, download skipped.')}"
-                            )
-                    except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
-                        await asyncio.sleep(wait_err.value)
-                        logger.warning(f"[{show_chat_username}]: FlowWait ", message_id, wait_err.value)
-                        _check_timeout(retry, message_id)
                     except Exception as e:
                         logger.exception(f"{e}")
                         pass
@@ -683,12 +674,7 @@ def need_skip_message(message, chat_download_config):
         if not (message.audio or message.video or message.photo or message.document):
             return True
 
-        # Case 2 数据库记录了已下载或等价已下载就跳过
-        msg_chat_id = 0 - message.chat.id - 1000000000000
-        if db.getStatus(msg_chat_id, message.id) in [1, 4]:
-            return True
-
-        # Case 3 不符合config文件条件就跳过 受 media_types file_formats 以及filter 控制
+        # Case 2 不符合config文件条件就跳过 受 media_types file_formats 以及filter 控制
         meta_data = MetaData()
         set_meta_data(meta_data, message, '')
         if meta_data.file_extension and meta_data.file_extension != '' and (
@@ -696,16 +682,6 @@ def need_skip_message(message, chat_download_config):
                 not meta_data.file_extension.replace('.', '').lower() in app.file_formats[meta_data.media_type]):
             return True
         if not app.exec_filter(chat_download_config, meta_data):
-            return True
-
-        # Case 4 文件严格存在就跳过
-        msg_dict = _get_media_meta(message)
-        if get_exist_files(msg_dict):
-            return True
-
-        # Case 5 数据库存在相似文件就跳过
-        db_files = get_exist_files_db(msg_dict)
-        if db_files and len(db_files) >= 1:
             return True
 
         return False
@@ -731,51 +707,23 @@ async def download_chat_task(
         if chat_download_config.ids_to_retry:
             retry_ids = list(chat_download_config.ids_to_retry)
             logger.info(f"[{node.chat_id}]{_t('Downloading files failed during last run')}...")
-            downloading_messages = []
-            if len(retry_ids) > 200:# retry文件过多的话 就按200/批次处理文件
-                batch_size = 200
-                for i in range(0, len(retry_ids), batch_size):
-                    batch_files = retry_ids[i:i + batch_size]
-                    try:
-                        downloading_messages: list = await client.get_messages(  # type: ignore
-                            chat_id=real_chat_id, message_ids=batch_files
-                        )
-                    except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
-                        await asyncio.sleep(wait_err.value)
-                    except Exception as e:
-                        logger.exception(f"{e}")
+            downloading_messages = Optional[AsyncGenerator["types.Message", None]]
+            batch_size = 200
+            for i in range(0, len(retry_ids), batch_size):
+                batch_files = retry_ids[i:i + batch_size]
+                try:
+                    downloading_messages = await client.get_messages(  # type: ignore
+                        chat_id=real_chat_id, message_ids=batch_files
+                    )
+                except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
+                    await asyncio.sleep(wait_err.value)
+                except Exception as e:
+                    logger.exception(f"{e}")
 
-                    if downloading_messages and len(downloading_messages) > 0:
-                        try:
-                            for message in downloading_messages:
-                                if need_skip_message(message, chat_download_config):
-                                    node.download_status[message.id] = DownloadStatus.SkipDownload
-                                    await upload_telegram_chat(
-                                        client,
-                                        node.upload_user,
-                                        app,
-                                        node,
-                                        message,
-                                        DownloadStatus.SkipDownload,
-                                    )
-                                    continue
-                                else:
-                                    await add_download_task(message, node)
-                                await asyncio.sleep(RETRY_TIME_OUT)
-                        except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
-                            await asyncio.sleep(wait_err.value)
-                        except Exception as e:
-                            logger.exception(f"{e}")
-
-                    await asyncio.sleep(RETRY_TIME_OUT)
-            else:
-                downloading_messages: list = await client.get_messages(  # type: ignore
-                    chat_id=real_chat_id, message_ids=retry_ids
-                )
-                if downloading_messages and len(downloading_messages)>0:
+                if downloading_messages and len(downloading_messages) > 0:
                     try:
-                        for message in downloading_messages:
-                            if need_skip_message(message, chat_download_config):
+                         for message in downloading_messages:
+                            if need_skip_message(message, chat_download_config) : # 不在下载范围内
                                 node.download_status[message.id] = DownloadStatus.SkipDownload
                                 await upload_telegram_chat(
                                     client,
@@ -787,12 +735,53 @@ async def download_chat_task(
                                 )
                                 continue
                             else:
-                                await add_download_task(message, node)
+                                # msg_dict = _get_media_meta(message)
+                                # await add_download_task(message, msg_dict, node)
+
+                                msg_dict = _get_media_meta(message)
+                                msg_db_status = _get_msg_db_status(msg_dict)
+                                msg_file_status = _get_msg_file_status(msg_dict)
+                                if msg_db_status == Msg_db_Status.DB_Exist:
+                                    if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
+                                        # 数据库有 文件有
+                                        continue
+                                    else:
+                                        # 数据库有 文件没了 重新下载
+                                        await add_download_task(message, msg_dict, node)
+                                elif msg_db_status == Msg_db_Status.DB_Aka_Exist:
+                                    # 数据库等价有 等价文件有没有暂时不管
+                                    # TODO 等价文件有没有问题解决
+                                    msg_dict['status'] = 4
+                                    insert_into_db(msg_dict)  # 写入数据库一条等价信息
+                                    continue
+                                elif msg_db_status == Msg_db_Status.DB_Aka_Downloading:
+                                    # 数据库有其他等价文件在下载
+                                    continue
+                                elif msg_db_status == Msg_db_Status.DB_No_Exist or msg_db_status == Msg_db_Status.DB_Downloading:
+                                    if msg_file_status == Msg_file_Status.File_Exist:
+                                        # 数据库没有 文件有
+                                        msg_dict['status'] = 1  # 补写入数据库
+                                        insert_into_db(msg_dict)
+                                        continue
+                                    elif msg_file_status == Msg_file_Status.File_Aka_Exist:
+                                        # 数据库没有 等价文件有
+                                        msg_dict['status'] = 4  # 补写入数据库
+                                        insert_into_db(msg_dict)
+                                        continue
+                                    else:
+                                        # 数据库没有 文件也没 下载
+                                        await add_download_task(message, msg_dict, node)
+                                elif msg_db_status == Msg_db_Status.DB_Passed:
+                                    continue
+
                             await asyncio.sleep(RETRY_TIME_OUT)
                     except pyrogram.errors.exceptions.flood_420.FloodWait as wait_err:
                         await asyncio.sleep(wait_err.value)
                     except Exception as e:
                         logger.exception(f"{e}")
+
+                await asyncio.sleep(RETRY_TIME_OUT)
+
 
         """Download all task"""
         messages_iter = get_chat_history_v2(
@@ -808,7 +797,7 @@ async def download_chat_task(
         async for message in message_line:  # type: ignore
             message_line.set_description("[%s]" % node.chat_id)
 
-            if need_skip_message(message, chat_download_config):
+            if need_skip_message(message, chat_download_config):  # 不在下载范围内
                 node.download_status[message.id] = DownloadStatus.SkipDownload
                 await upload_telegram_chat(
                     client,
@@ -820,7 +809,36 @@ async def download_chat_task(
                 )
                 continue
             else:
-                await add_download_task(message, node)
+                msg_dict = _get_media_meta(message)
+                msg_db_status = _get_msg_db_status(msg_dict)
+                msg_file_status = _get_msg_file_status(msg_dict)
+                if msg_db_status == Msg_db_Status.DB_Exist:
+                    if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
+                        # 数据库有 文件有
+                        continue
+                    else:
+                        # 数据库有 文件没了 重新下载
+                        await add_download_task(message, msg_dict, node)
+                elif msg_db_status == Msg_db_Status.DB_Aka_Exist:
+                    # 数据库等价有 等价文件有没有暂时不管
+                    # TODO 等价文件有没有问题解决
+                    msg_dict['status'] = 4
+                    insert_into_db(msg_dict)  # 写入数据库一条等价信息
+                    continue
+                elif msg_db_status == Msg_db_Status.DB_Downloading or msg_db_status == Msg_db_Status.DB_Aka_Downloading:
+                    # 数据库有其他等价文件在下载
+                    continue
+                elif msg_db_status == Msg_db_Status.DB_No_Exist:
+                    if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
+                        # 数据库没有 文件有
+                        msg_dict['status'] = 1  # 补写入数据库
+                        insert_into_db(msg_dict)
+                        continue
+                    else:
+                        # 数据库没有 文件也没 下载
+                        await add_download_task(message, msg_dict, node)
+                elif msg_db_status == Msg_db_Status.DB_Passed:
+                    continue
 
         chat_download_config.need_check = True
         chat_download_config.total_task = node.total_task
@@ -830,7 +848,6 @@ async def download_chat_task(
 
 
 async def download_all_chat(client: pyrogram.Client):
-
     """Download All chat"""
     logger.info(f"开始读取全部Chat...")
     for key, value in app.chat_download_config.items():
@@ -841,6 +858,8 @@ async def download_all_chat(client: pyrogram.Client):
             logger.warning(f"Download {key} error: {e}")
         finally:
             value.need_check = True
+            logger.info(f"{_t('update config')}......")
+            app.update_config()
     logger.info(f"读取全部Chat完毕...")
 
 
@@ -921,29 +940,9 @@ def main():
     try:
         app.pre_run()
         init_web(app)
-
         set_max_concurrent_transmissions(client, app.max_concurrent_transmissions)
-
         app.loop.run_until_complete(start_server(client))
         logger.success(_t("Successfully started (Press Ctrl+C to stop)"))
-        # scheduler = BlockingScheduler({'apscheduler.job_defaults.max_instances': 2})
-        # hour_now = datetime.now().hour
-        # minute_now = datetime.now().minute
-        # if minute_now == 59:
-        #     minute_next = 0
-        #     if hour_now == 23:
-        #         hour_next = 0
-        #     else:
-        #         hour_next = hour_now + 1
-        # else:
-        #     hour_next = hour_now
-        #     minute_next = minute_now +1
-
-        # scheduler.add_job(main_download, 'cron', hour=hour_next, minute=minute_next, second = 30, args=[client, tasks])
-        # scheduler.add_job(main_clean, 'cron', hour=hour_next, minute=minute_next, second = 0, args=[client, tasks])
-        # scheduler.add_job(main_download, 'interval', hours=1, jitter=20, id='test_job4')
-        # scheduler.add_job(main_clean, 'interval', hours=1, jitter=20, id='test_job4')
-        # scheduler.start()
         main_download(client, tasks)
 
     except KeyboardInterrupt:

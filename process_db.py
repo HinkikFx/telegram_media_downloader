@@ -1,14 +1,12 @@
-import difflib
+import asyncio
 import json
 import os
 import re
-import shutil
 import sys
+import threading
 from pathlib import Path
 from time import sleep
-
 from tqdm import tqdm
-
 from module import sqlmodel
 from playhouse.shortcuts import model_to_dict
 from utils.format import validate_title, guess_media_type, move_file, is_exist_files_with_prefix, process_string
@@ -21,7 +19,7 @@ sizerange_min = 0.005
 if sys.platform.startswith('linux'):
     root_dir = "/mnt/onedrive/"
 else:
-    root_dir = "/Users/wuyun/Downloads/mnt/onedrive/"
+    root_dir = "/Users/wuyun/Downloads/mnt/alist-local"
 
 
 def has_japanese_or_korean_chars(a: str) -> bool:
@@ -34,9 +32,90 @@ def get_files_in_dir(dir_path):
     file_list = []
     for root, dirs, files in os.walk(dir_path):
         for file_name in files:
-            if has_japanese_or_korean_chars(file_name):
-                file_list.append(os.path.join(root, file_name))
+           file_list.append(os.path.join(root, file_name))
     return file_list
+
+
+def get_msg_info_from_file(file_dir: str, file_name: str):
+    chat_id = int(re.search(r'\d+', os.path.basename(os.path.dirname(file_dir))).group())
+    msg_id = int(re.search(r'\d+', file_name).group())
+    return chat_id,msg_id
+
+def worker_file2db(file_paths):
+    for path in file_paths:
+        update_db_from_filedir(path)
+
+def get_subfolders(a):
+    try:
+        subfolders = [f for f in os.listdir(a) if os.path.isdir(os.path.join(a, f))]
+        return subfolders
+    except OSError:
+        return "无法访问目录或目录不存在。"
+def file2db_main():
+    asmr_dirs = db.get_subfolders(os.join(root_dir, 'docu/telegram/Asmr'))
+    book_dirs = db.get_subfolders(os.join(root_dir, 'docu/telegram/Books'))
+    all_dirs = asmr_dirs + book_dirs
+    try:
+        num_threads = 5
+        chunk_size = len(all_dirs) // num_threads
+        threads = []
+        for i in range(num_threads):
+            # for msg in tqdm(all_msg):
+            start = i * chunk_size
+            end = (i + 1) * chunk_size if i < num_threads - 1 else len(all_dirs)
+            thread = threading.Thread(target=worker_file2db, args=(all_dirs[start:end],))
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt")
+    except Exception as e:
+        print(e)
+
+def update_db_from_filedir(dir_path):
+    for root, dirs, files in tqdm(os.walk(dir_path)):
+        for file_name in files:
+            chat_id,msg_id = get_msg_info_from_file(root, file_name)
+
+            # 处理同id多个文件的历史问题
+            files = find_files_with_prefix(root, file_name)
+            for file in files:
+                if file == file_name:
+                    pass
+                else:
+                    del_file(file)
+
+            # 处理文件和数据库对应有误的问题
+            msg = db.getStatus(chat_id, chat_id)
+            if msg.ststus == 0: #文件存在 但数据库不存在 写一个2标志位 下次运行可以补写信息入库
+                msg_dict = {
+                    'chat_id': chat_id,
+                    'message_id': msg_id,
+                    'filename': file_name,
+                    'caption': '',
+                    'title': '',
+                    'mime_type': '',
+                    'media_size': '',
+                    'media_duration': '',
+                    'media_addtime': '',
+                    'chat_username': '',
+                    'chat_title': '',
+                    'addtime': '',
+                    'msg_type': '',
+                    'msg_link': '',
+                    'status': 2
+                }
+                db.msg_insert_to_db(msg_dict)
+                print(f"[{chat_id}]msg_id 加入待下载队列！")
+            elif msg.ststus == 1: #文件存在 数据库也存在
+                pass
+            elif msg.ststus == 2 or msg.ststus == 3 or msg.ststus == 4:  # 文件存在 但数据库记录错误
+                msg.status = 1
+                db.msg_update_to_db(model_to_dict(msg))
+                print(f"{msg.filename} 文件在 修改数据库！")
 
 def del_file(file_path):
     file_path = Path(file_path)
@@ -62,7 +141,7 @@ def find_files_with_prefix(folder_path, prefix):
                     file_list.append(entry.path)
         return file_list
     else:
-        return False
+        return []
 
 def save_list_to_json(list, json_file):
     with open(json_file, 'w', encoding='utf-8') as f:
@@ -162,21 +241,42 @@ def update_status():
     if not last_id or last_id == '':
         last_id = 0
     all_msg = db.get_all_message_from(last_id)
+    file2del = []
     try:
         for msg in tqdm(all_msg):  # 遍历文件夹
             last_id = msg.id
-            file_name_pre = f"{[msg.message_id]}"
-            file_path = get_aka_file_dir(model_to_dict(msg))
+            folder_path, prefix = get_aka_msg(model_to_dict(msg))
+            files_disk = find_files_with_prefix(folder_path, prefix)
             if msg.status == 1:
-                if not file_path or not is_exist_files_with_prefix(file_path, file_name_pre):
-                    msg.status = 4
+                if files_disk and len(files_disk) >= 1: #文件存在
+                    pass
+                else:
+                    msg.status = 2
                     db.msg_update_to_db(model_to_dict(msg))
-                    print(f"{msg.filename} is not exist. db updated......")
-            else:
-                if file_path and is_exist_files_with_prefix(file_path, file_name_pre):
+                    print(f"{msg.filename} 文件丢了 重新下载吧！")
+            elif msg.status == 2:
+                if files_disk and len(files_disk) >= 1: #文件存在
                     msg.status = 1
                     db.msg_update_to_db(model_to_dict(msg))
-                    print(f"{msg.filename} is exist. db updated......")
+                    print(f"{msg.filename} 文件下完了 不要再下载了！")
+                else:
+                    pass
+            elif msg.status == 3:
+                if files_disk and len(files_disk) >= 1: #文件存咋
+                    msg.status = 1
+                    db.msg_update_to_db(model_to_dict(msg))
+                    file2del.append([msg.chat_id, msg.id])
+                    print(f"{msg.filename} 文件下完了 但是没让下啊 需要删除掉！")
+                else:
+                    pass
+            elif msg.status == 4:
+                if files_disk and len(files_disk) >= 1: #文件存在
+                    msg.status = 1
+                    db.msg_update_to_db(model_to_dict(msg))
+                    file2del.append([msg.chat_id, msg.message_id])
+                    print(f"{msg.filename} 文件下完了 但是没让下啊 需要删除掉！")
+                else:
+                    pass
 
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
@@ -185,73 +285,65 @@ def update_status():
     finally:
         print(f"last_id = {last_id}")
         save_last_id_json('./temp/last_update_id.json', last_id)
+        save_list_to_json('./temp/2del_ids.json', file2del)
+
+def worker(msg_list):
+    for msg in tqdm(msg_list):
+        check_msg(msg)
+
+
+def check_msg(msg:dict):
+    if db.getStatusById(msg.id) != 1:
+        print(f"{msg.filename} is dealed. passed......")
+        return
+    folder_path, prefix = get_aka_msg(model_to_dict(msg))
+    file_paths = find_files_with_prefix(folder_path, prefix)
+    if not file_paths or len(file_paths) == 0:
+        # 文件丢了 重新下载吧
+        msg.status = 2
+        db.msg_update_to_db(model_to_dict(msg))
+        print(f"{msg.filename} 文件丢了 重新下载吧！")
+        return
+
+    similar_files_db = db.get_similar_files(model_to_dict(msg), similar_set, sizerange_min)  # 找到他的相似文件
+    if len(similar_files_db) >= 20:
+        print('debug')
+    for similar_file_db in similar_files_db:
+        folder_path, prefix = get_aka_msg(model_to_dict(similar_file_db))
+        similar_files_disk = find_files_with_prefix(folder_path, prefix)
+        for similar_file_disk in similar_files_disk:
+            from_path = os.path.dirname(similar_file_disk)
+            save_filename = os.path.basename(similar_file_disk)
+            file_ext = os.path.splitext(save_filename)[-1]
+            subdir = get_save_dir(file_ext)
+            to_path = os.path.join(subdir, '2del', os.path.relpath(from_path, subdir))
+            move_file(from_path, to_path, save_filename)
+
+            similar_file_db.status = 4
+            db.msg_update_to_db(model_to_dict(similar_file_db))
+            print(
+                f"\n[{msg.chat_id}]{msg.title}=VS=[{similar_file_db.chat_id}]{similar_file_db.title} has been moved to 2del dir......")
 
 def del_dulp():
-
     last_id = load_last_id_json('./temp/last_id.json')
     if not last_id or last_id == '':
         last_id = 0
     all_msg = db.get_all_finished_message_from(last_id)
     try:
-        # for msg in tqdm(all_msg):  # 遍历文件夹
-        #     if '【' in msg.filename:
-        #         filename_only = os.path.splitext(msg.filename)[-2]
-        #         print (f"{filename_only}==================={process_string(filename_only)}")
+        num_threads = 5
+        chunk_size = len(all_msg) // num_threads
+        threads = []
+        for i in range(num_threads):
+        # for msg in tqdm(all_msg):
+            start = i * chunk_size
+            end = (i + 1) * chunk_size if i < num_threads - 1 else len(all_msg)
+            thread = threading.Thread(target=worker, args=(all_msg[start:end],))
+            thread.start()
+            threads.append(thread)
 
-        for msg in tqdm(all_msg): #遍历文件夹
-        # for msg in all_msg:  # 遍历文件夹
-            last_id = msg.id
-            # if not msg.media_duration or msg.media_duration <= 0:
-            #     continue
-            if db.getStatusById(msg.id) != 1:
-                print(f"{msg.filename} is dealed. passed......")
-                continue
-            simlar_files = db.get_similar_files(model_to_dict(msg), similar_set, sizerange_min) #找到他的相似文件
-            if len(simlar_files) > 1: #大于1个 说明有重复文件记录
-                remained = False
-                for simlar_file in simlar_files:
-                    # folder_path, prefix = get_aka_msg(model_to_dict(simlar_file))
-                    # file_paths = find_files_with_prefix(folder_path, prefix)
-                    file_path = get_aka_file_path(model_to_dict(simlar_file))
-                    if not file_path:
-                        simlar_file.status = 4
-                        db.msg_update_to_db(model_to_dict(simlar_file))
-                        print(f"{simlar_file.filename} is not exist. db updated......")
-                        continue
-                    else:
-                        if remained:
-                            if os.path.exists(file_path):
-                                # del_file(file_path)
-                                from_path = os.path.dirname(file_path)
-                                save_filename = os.path.basename(file_path)
-                                file_ext = os.path.splitext(simlar_file.filename)[-1]
-                                subdir = get_save_dir(file_ext)
-                                to_path = os.path.join(subdir, '2del', os.path.relpath(from_path, subdir))
-                                move_file(from_path,to_path,save_filename)
+        for thread in threads:
+            thread.join()
 
-                            simlar_file.status = 4
-                            db.msg_update_to_db(model_to_dict(simlar_file))
-                            print(f"{simlar_file.filename} has been moved to 2del dir......")
-
-                        else:
-                            if os.path.exists(file_path) and os.path.getsize(file_path) >0:
-                                remained = True
-                                print(f"\n{simlar_file.filename} has been remained++++")
-                            else:
-                                simlar_file.status = 4
-                                db.msg_update_to_db(model_to_dict(simlar_file))
-                                print(f"{simlar_file.filename} is missing!!!!. db updated......")
-            elif len(simlar_files) == 1:#1个 说明没有重复文件记录 顺便更新一下存不存在
-                simlar_file = simlar_files[0]
-                # folder_path, prefix = get_aka_msg(model_to_dict(simlar_file))
-                # file_paths = find_files_with_prefix(folder_path, prefix)
-                file_path = get_aka_file_path(model_to_dict(simlar_file))
-                if not file_path:
-                    simlar_file.status = 4
-                    db.msg_update_to_db(model_to_dict(simlar_file))
-                    print(f"{simlar_file.filename} is not exist. db updated......")
-                else:
-                    print(f"{simlar_file.filename} has no aka_file......")
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
     except Exception as e:
@@ -261,7 +353,19 @@ def del_dulp():
         save_last_id_json('./temp/last_id.json', last_id)
 
 def main():
-    update_status()
+    # subdir_asmr = os.path.join(root_dir, 'docu/telegram/Asmr')
+    # asmr_ids = get_files_id_in_dir(subdir_asmr)
+    # save_list_to_json(asmr_ids, './temp/asmr_ids.json')
+    # subdir_book = os.path.join(root_dir, 'docu/telegram/Books')
+    # book_ids = get_files_id_in_dir(subdir_book)
+    # save_list_to_json(book_ids, './temp/book_ids.json')
+    # print("\nupdate_status starting")
+    # update_status()
+    # print("\nupdate_status ended")
+    print("\ndel_dulp starting")
+    del_dulp()
+    print("\ndel_dulp ended")
+
 
 if __name__ == "__main__":
     main()

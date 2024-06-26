@@ -593,8 +593,6 @@ def record_download_status(func):
     async def inner(
         client: pyrogram.client.Client,
         message: pyrogram.types.Message,
-        media_types: List[str],
-        file_formats: dict,
         node: TaskNode,
     ):
         if _download_cache[(node.chat_id, message.id)] is DownloadStatus.Downloading:
@@ -602,7 +600,7 @@ def record_download_status(func):
 
         _download_cache[(node.chat_id, message.id)] = DownloadStatus.Downloading
 
-        status, file_name = await func(client, message, media_types, file_formats, node)
+        status, file_name = await func(client, message, node)
 
         _download_cache[(node.chat_id, message.id)] = status
 
