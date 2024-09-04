@@ -559,7 +559,6 @@ async def direct_download(
 
     await _bot.add_download_task(
         download_message,
-        None,
         node,
     )
 
@@ -1032,7 +1031,6 @@ async def listen_forward_msg(client: pyrogram.Client, message: pyrogram.types.Me
         else:
             await _bot.add_download_task(
                 message,
-                None,
                 node,
             )
 

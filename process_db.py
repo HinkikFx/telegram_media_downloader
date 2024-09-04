@@ -2,14 +2,20 @@ import asyncio
 import json
 import os
 import re
+import shlex
+import shutil
 import sys
 import threading
 from pathlib import Path
 from time import sleep
 from tqdm import tqdm
 from module import sqlmodel
-from playhouse.shortcuts import model_to_dict
-from utils.format import validate_title, guess_media_type, move_file, is_exist_files_with_prefix, process_string
+from playhouse.shortcuts import model_to_dict, dict_to_model
+from utils.format import validate_title, guess_media_type, move_file, process_string
+import concurrent.futures
+import subprocess
+from moviepy.editor import VideoFileClip
+import ffmpeg
 
 db = sqlmodel.Downloaded()
 
@@ -176,18 +182,30 @@ def get_aka_msg(msg_dict):
     return folder_path, prefix
 
 
-def get_save_dir(file_ext):
+def get_save_dir(file_ext, delit = False):
     file_type = guess_media_type(file_ext)
-    if file_type == 'video':
-        save_dir = os.path.join(root_dir,'cav1/telegram')
-    elif file_type == 'audio':
-        save_dir = os.path.join(root_dir,'docu/telegram/Asmr')
-    elif file_type == 'photo':
-        save_dir = os.path.join(root_dir,'images2/telegram')
-    elif file_type == 'document':
-        save_dir = os.path.join(root_dir,'docu/telegram/Books')
+    if not delit:
+        if file_type == 'video':
+            save_dir = os.path.join(root_dir,'cav1/telegram')
+        elif file_type == 'audio':
+            save_dir = os.path.join(root_dir,'docu/telegram/Asmr')
+        elif file_type == 'photo':
+            save_dir = os.path.join(root_dir,'images2/telegram')
+        elif file_type == 'document':
+            save_dir = os.path.join(root_dir,'docu/telegram/Books')
+        else:
+            save_dir = os.path.join(root_dir,'upload/telegram')
     else:
-        save_dir = os.path.join(root_dir,'upload/telegram')
+        if file_type == 'video':
+            save_dir = os.path.join(root_dir,'cav1/telegram/del')
+        elif file_type == 'audio':
+            save_dir = os.path.join(root_dir,'docu/telegram/del/Asmr')
+        elif file_type == 'photo':
+            save_dir = os.path.join(root_dir,'images2/telegram/del')
+        elif file_type == 'document':
+            save_dir = os.path.join(root_dir,'docu/telegram/del/Books')
+        else:
+            save_dir = os.path.join(root_dir,'upload/telegram/del')
 
     return save_dir
 
@@ -287,9 +305,13 @@ def update_status():
         save_last_id_json('./temp/last_update_id.json', last_id)
         save_list_to_json('./temp/2del_ids.json', file2del)
 
+
 def worker(msg_list):
     for msg in tqdm(msg_list):
         check_msg(msg)
+
+def check_msg_name(msg:dict):
+    print(f"filename:  {msg.title}===>{process_string(msg.title)}\n")
 
 
 def check_msg(msg:dict):
@@ -330,7 +352,7 @@ def del_dulp():
         last_id = 0
     all_msg = db.get_all_finished_message_from(last_id)
     try:
-        num_threads = 5
+        num_threads = 1
         chunk_size = len(all_msg) // num_threads
         threads = []
         for i in range(num_threads):
@@ -352,6 +374,113 @@ def del_dulp():
         print(f"last_id = {last_id}")
         save_last_id_json('./temp/last_id.json', last_id)
 
+def get_duration_ffmpeg(file_path):
+    probe = ffmpeg.probe(file_path)
+    stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'audio'), None)
+    duration = float(stream['duration'])
+    return duration
+
+def del_noused(folder_path):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        for entry in os.scandir(folder_path):
+            if entry.is_dir():
+                executor.submit(del_noused_worker, entry.path)
+
+def del_noused_worker(start_dir):
+    moved = 0
+    audio_video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.mp3', '.wav', '.flac', '.aac', '.m4a']
+    for root, dirs, files in os.walk(start_dir):
+        for file in files:
+            chat_id, msg_id = get_msg_info_from_file(root, file)
+
+            msg = db.getMsg('', msg_id, 1, chat_id)
+
+            if not msg or msg.status == 0:
+                if '.' in file and os.path.splitext(file)[-1].lower() in ['.mp4', '.avi', '.mkv', '.mov', '.mp3', '.wav', '.flac', '.aac', '.m4a']:
+                    duration = 0
+                    try:
+                        # 获取文件时长信息
+                        file_path = os.path.join(root, file)
+                        duration = get_duration_ffmpeg(file_path)  # 以秒为单位的时长
+                    except Exception as e:
+                        pass
+
+                    if duration >= 1200:
+                        msg_dict = {
+                            'chat_id': chat_id,
+                            'message_id': msg_id,
+                            'filename': file,
+                            'caption': '',
+                            'title': '',
+                            'mime_type': '',
+                            'media_size': '',
+                            'media_duration': '',
+                            'media_addtime': '',
+                            'chat_username': '',
+                            'chat_title': '',
+                            'addtime': '',
+                            'msg_type': '',
+                            'msg_link': '',
+                            'status': 2
+                        }
+                        db.msg_insert_to_db(msg_dict)
+                        continue
+
+                to_path = root.replace('/telegram/', '/telegram/2del/')
+                move_file(root, to_path, file)
+                print(f"[{chat_id}]{file} is moved to 2del dir")
+                moved += 1
+            elif msg.status == 1:
+                # folder_path, prefix = get_aka_msg(model_to_dict(msg))
+                # files_disk = find_files_with_prefix(folder_path, prefix)
+                # if not files_disk or len(files_disk) < 1:
+                #     print('main file is missed!')
+                #     msg.status = 2
+                #     db.msg_insert_to_db(model_to_dict(msg))
+                #     continue
+                # print(f"[{msg}]")
+                pass
+            elif msg.status == 4:
+                to_path = root.replace('/telegram/', '/telegram/2dup/')
+                move_file(root, to_path, file)
+                print(f"[{chat_id}]{file} is moved to 2dup dir")
+                moved += 1
+                # similar_set = 0.90
+                # sizerange_min = 0.01
+                # msg_dict = model_to_dict(db.getMsg('', msg_id, 4, chat_id))
+                # db_files = db.get_similar_files(msg_dict, similar_set, sizerange_min, [1])
+                # if db_files and len(db_files) >= 1:
+                #     for similar_file_db in db_files:
+                #         folder_path, prefix = get_aka_msg(model_to_dict(similar_file_db))
+                #         similar_files_disk = find_files_with_prefix(folder_path, prefix)
+                #         if similar_files_disk and len(similar_files_disk)>=1:
+                #             to_path = root.replace('/telegram/', '/telegram/2dup/')
+                #             move_file(root, to_path, file)
+                #             print(f"[{chat_id}]{file} is moved to 2dup dir")
+                #             moved += 1
+                #             break
+                #         else:
+                #             print ('main file is missed!')
+                # else:
+                #     print('main file is missed!')
+
+    print(f"{start_dir}  moved {moved} files")
+
+def deal_chat_dir(chat_id_str):
+    if sys.platform.startswith('linux'):
+        root_dir = "/mnt/onedrive/docu"
+    else:
+        root_dir = "/Users/wuyun/Downloads/mnt/alist-local/docu/telegram/Asmr"
+
+    folder_path = ''
+    with os.scandir(root_dir) as dirs:
+        for dirit in dirs:
+            if dirit.name.endswith(chat_id_str):
+                folder_path = os.path.join(root_dir,dirit.name)
+                break
+    if folder_path:
+        del_noused(folder_path)
+
 def main():
     # subdir_asmr = os.path.join(root_dir, 'docu/telegram/Asmr')
     # asmr_ids = get_files_id_in_dir(subdir_asmr)
@@ -362,9 +491,14 @@ def main():
     # print("\nupdate_status starting")
     # update_status()
     # print("\nupdate_status ended")
-    print("\ndel_dulp starting")
-    del_dulp()
-    print("\ndel_dulp ended")
+    # start_dir = os.path.join(root_dir, 'docu/telegram/Asmr')
+    # print("\ndel_dulp starting")
+    # chat_id = 'asmrcabian'
+    # deal_chat_dir(chat_id)
+    # print("\ndel_dulp ended")
+    # del_dulp()
+    start_dir = os.path.join(root_dir, 'docu/telegram/Asmr')
+    del_noused(start_dir)
 
 
 if __name__ == "__main__":

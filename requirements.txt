@@ -15,3 +15,5 @@ zhon
 filesplit
 tqdm
 apscheduler
+python-ffmpeg
+opencv-python

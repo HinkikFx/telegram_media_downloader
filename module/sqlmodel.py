@@ -179,6 +179,20 @@ class Downloaded(BaseModel):
                         return 0
         return 0 #0为不存在 1未已完成 2为下载中 3 暂时未使用 4为等效已下载
 
+    def insert_into_db(self, media_dict: dict):
+        try:
+            db_status = self.getStatus(chat_id=media_dict.get('chat_id'), message_id=media_dict.get('message_id'))
+            if db_status == 0:  # 不存在记录则插入
+                self.msg_insert_to_db(media_dict)
+            else:  # 存在记录则更新
+                self.msg_update_to_db(media_dict)
+
+        except Exception as e:
+            # pylint: disable = C0301
+            logger.error(
+                f"[{e}].",
+                exc_info=True,
+            )
     def msg_insert_to_db(self, dictit :dict):
         if db.autoconnect == False:
             db.connect()
@@ -323,11 +337,12 @@ class Downloaded(BaseModel):
             # 判断依据Step1.3： 找出类型一致 文件名非常像 大小差别在10倍允许值范围的文件记录
             media_size_1 = math.floor(msgdict.get('media_size') * (1 - sizerange_min * 10))
             media_size_2 = math.floor(msgdict.get('media_size') * (1 + sizerange_min * 10))
-            filename = msgdict.get('filename')
-            if '.' in filename:
-                filename = os.path.splitext(msgdict.get('filename'))[-2]
 
-            file_core_name = format.process_string(filename)
+            if not msgdict.get('title') or msgdict.get('title') =='':
+                return
+
+            file_core_name = re.sub(r"[-_~～]", ' ', msgdict.get('title', ''))
+
             if file_core_name and len(file_core_name) >= 4:
                 result2 = Downloaded.select().where(Downloaded.mime_type == msgdict.get('mime_type'),
                                                     (Downloaded.filename % f'*{file_core_name.replace(" ", "*")}*' | Downloaded.title % f'*{file_core_name.replace(" ", "*")}*'),
@@ -345,8 +360,8 @@ class Downloaded(BaseModel):
                 downloaded = result1.union(result2).union(result3)
             else:
                 downloaded = result1
-            if len(downloaded) > 20:
-                print(f'debug：{file_core_name}')
+            # if len(downloaded) > 20:
+            #     print(f'debug：{file_core_name}')
             for record in downloaded:
                 if record.chat_id == msgdict.get('chat_id') and record.message_id == msgdict.get('message_id'): # 是自己
                     # if record.status == 1:  # 如果是已完成状态 直接加入列表
@@ -360,7 +375,7 @@ class Downloaded(BaseModel):
                         similar_file_list.append(record)
                         continue
             # db.close()
-            if similar_file_list and len(similar_file_list)>=1:
+            if similar_file_list and len(similar_file_list) >= 1:
                 return similar_file_list
             else:
                 return []
@@ -434,7 +449,7 @@ class Downloaded(BaseModel):
             return None
 
     def retry_msg_insert_to_db(self, retry_chat_username :str, retry_msg_ids: []):
-        if not retry_msg_ids:
+        if not retry_msg_ids or not isinstance(retry_msg_ids, list):
             return False
         if db.autoconnect == False:
             db.connect()

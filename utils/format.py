@@ -2,7 +2,10 @@
 
 import math
 import os
-import re
+import shlex
+import time
+
+import regex as re
 import shutil
 import unicodedata
 from dataclasses import dataclass
@@ -31,6 +34,17 @@ def load_waste_word_json(json_file):
         with open(json_file, 'r', encoding='utf-8') as f:
             waste_words = json.load(f)
         return waste_words
+
+def remove_special_characters(text):
+    # 定义一个正则表达式模式，匹配所有非字母、数字、汉字、日文字等字符
+    pattern = re.compile(r'[^\w\u4e00-\u9fff\u3040-\u30ff\u31f0-\u31ff]')
+    # 使用sub方法替换匹配的字符为空字符串
+    cleaned_text = re.sub(pattern, '', text)
+    return cleaned_text
+
+def save_list_to_json(list, json_file):
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(list, f, indent=4, ensure_ascii=False)
 
 
 def format_byte(size: float, dot=2):
@@ -321,6 +335,7 @@ def validate_title(title: str) -> str:
         return ''
     r_str = r"[/\\:*?\"<>|\n]"  # '/ \ : * ? " < > |'
     new_title = re.sub(r_str, " ", title)
+    # new_title = remove_special_characters(title)
     return new_title
 
 def validate_title_clean(title: str) -> str:
@@ -335,7 +350,7 @@ def validate_title_clean(title: str) -> str:
     if not title or title == '':
         return ''
 
-    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】"
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n\s/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）——+：；《》]+~【】丶̫•"
     b = re.sub(r_str, " ", title)
 
     # 去除英文标点符号
@@ -360,27 +375,43 @@ def create_progress_bar(progress, total_bars=10):
 
 
 def process_string(string_a: str):
+    if not string_a or string_a == '':
+        return ''
     a = string_a
     # 发现文件名中有时包含两次后缀，处理掉
     if string_a.lower().endswith('mp3'):
         a = re.sub("mp3", "", a, flags=re.IGNORECASE)
     elif string_a.lower().endswith('mp4'):
         a = re.sub("mp4", "", a, flags=re.IGNORECASE)
+    elif string_a.lower().endswith('txt'):
+        a = re.sub("txt", "", a, flags=re.IGNORECASE)
 
-    waste_words_patterns = ["Asm糖七baby", "ASM艺彤酱", "ASM艺彤酱", "dea诱耳", "阿木木", "不详", "顾骁梦",
+
+    # 清理已知的废文字
+    waste_words_patterns = ["Asm糖七baby", "ASM艺彤酱", "ASM艺彤酱", "dea诱耳", "阿木木", "菊花花", "不详", "顾骁梦",
                             "酒Whiskey", "朗读向", "李莎", "林三岁-", "另类", "萝莉一凡", "夢冬", "南征", "清软~喵",
                             "清软喵.*?", "绅士音声", "说人话的吊", "小芸豆儿新地点", "音声", "有声清读", "御姐音",
                             "芝恩㱏", "烛灵儿", "（剧情）", "奶兮酱", "唐樱樱", "迷鹿", "沐醒醒子", "初霸霸", "小芸豆",
-                            "直播", "小小奶瓶儿", "渔晚", "（立体声）", "【18+中文音声】", "南飞作品", "步二",
+                            "直播", "小小奶瓶儿", "渔晚", "（立体声）", "【18+中文音声】", "南飞作品", "步二", "剧情:",
                             "阿稀稀大魔王", "大伊伊", "丸子君", "流景", "是喵宝啊", "桥桥超温柔", "椰子", "黧落大总攻",
                             "绮夏", "小羊喵", "婉儿别闹", "林三岁", "Floa圆圆", "步二", "步一", "步三", "枸杞子",
-                            "JOK~清~", "五月织姬", "浅小茉", "夏乔恩", "迷路的卡卡酱", "陈玺颜", "织月黛黛",
-                            "雾心宝贝", "是喵宝呀", "是幼情呀", "离二烟烟", "林晓蜜", "不要吃咖喱", "奶斯学姐",
+                            "JOK~清~", "五月织姬", "浅小茉", "夏乔恩", "迷路的卡卡酱", "陈玺颜", "织月黛黛", "剧场:",
+                            r'\[人妻熟妇\]', r'\[青春校园\]', r'\[都市生活\]', r'\[古典修真\]', r'\[武侠玄幻\]',
+                            r'\[家庭乱伦\]', r'\[现代情感\]',
+                            "是喵宝呀", "是幼情呀", "离二烟烟", "林晓蜜", "不要吃咖喱", "奶斯学姐", "人妻熟妇_",
+                            "雾心宝贝",
                             "ainnight雨", "暴躁啊御", "羊绵绵", "月一姐姐", "井上鸢御", "大宝 ", "奶斯姐姐", "楠兮",
                             "焱绯", "莉香", "花情女王", "耳屿剧社", "小米ASM", "香取绮罗", "雪音", "小曦老师",
                             "辣不辣", "不二丸叽", "小萌", "小太阳贼大", "圈圈 ", "奶兮酱", "唐樱樱", "曦曦", "沐醒醒",
-                            "喵小咪", "音无来未", "温舒蕾", "林暮色", "小一熟了", "子初霸霸火箭", "（全本）","派派小说",
-                            "(完结 番外)", "【完】", "【人妻】","Discuz", r"【中文.*?】",
+                            "喵小咪", "音无来未", "温舒蕾", "林暮色", "小一熟了", "子初霸霸火箭", "（全本）", "派派小说",
+                            "【完本】", "（未删节）", "步二", "步一", "步三",
+                            "全作者", "全图文", "粉樱桃", "萝莉一凡_"
+                            "（催眠）",
+                            "（系统）",
+                            "（原创_催眠类！）",
+                            "（校对板）",
+                            "（未删节全本）",
+                            "(完结 番外)", "【完】", "【人妻】", "Discuz", r"【中文.*?】", r"全本$", r"完结$", r"作者.+?$", r"（作者.+?）$",
                             r"【18禁.*?】", r"【3D.*?】", r"【A_SMR.*?】", r"【ASMR.*?】", r"【NJ..*?】", r"【NTR.*?】",
                             r"【Q弹一只菊.*?】",
                             r"【R18.*?】", r"【sophia喵酱.*?】r", r"【YiyiZi.*?】", r"【安里.*?】", r"【安眠.*?】",
@@ -397,7 +428,7 @@ def process_string(string_a: str):
                             r"【桥桥.*?】", r"【清软喵.*?】", r"【情感.*?】", r"【全集.*?】", r"【群[0-9].*?】",
                             r"【人头麦.*?】r", r"【桑九.*?】", r"【闪亮银.*?】", r"【闪亮银.*?】", r"【绅士.*?】", r"【实录.*?】",
                             r"【是幼情吖.*?】", r"【兽人.*?】", r"【双声道.*?】", r"【睡前故事.*?】", r"【岁岁.*?】r",
-                            r"【桃夭.*?】",
+                            r"【桃夭.*?】", r"(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})", r"(\d{4})_(\d{2})_(\d{2})",
                             r"【同人.*?】", r"【完结.*?】", r"【完整.*?】", r"【无人声.*?】", r"【武侠.*?】", r"【希尔薇.*?】",
                             r"【闲话家常.*?】", r"【小剧场.*?】", r"【小咖喱.*?】r", r"【小咪.*?】", r"【小墨.*?】",
                             r"【小苮儿.*?】",
@@ -409,25 +440,42 @@ def process_string(string_a: str):
                             r"【枕边.*?】", r"【直播.*?】", r"【中文.*?】", r"【助眠.*?】", r"【紫眸.*?】", r"【作者\..*?】",
                             r"作者:.*?", r"全$"]
 
-    # print (f"\nbefore:{a}\n")
-
     for waste_pattern in waste_words_patterns:
         if re.search(waste_pattern, a, flags=re.IGNORECASE):
             a = re.sub(waste_pattern, '', a, flags=re.IGNORECASE)
 
-    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配中文字符的正则表达式范围
-    if bool(pattern.search(a)):
-        # 去掉开头的非汉字字符
-        a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
-    else:
-        # 去掉开头的非英文字符
-        a = re.sub(r'^[^a-zA-Z]+', '', a)
+    # pattern = re.compile(r'[^\w\u4e00-\u9fff\u3040-\u30ff\u31f0-\u31ff‘’-]')  # 匹配中文、引文、日文、数字字符的正则表达式范围
+    pattern = r'[^\u4e00-\u9fff\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\uac00-\ud7af\u3000-\u303f\ufe10-\ufe1f\ufe30-\ufe4f\uff00-\uffef\w\s\p{P}]'
+    a = re.sub(pattern, ' ', a)
+
+    # if bool(pattern.search(a)):
+    #     # 去掉开头的非汉字字符
+    #     a = re.sub(r'^[^\u4e00-\u9fa5]+', '', a)
+    # else:
+    #     # 去掉开头的非英文字符
+    #     a = re.sub(r'^[^a-zA-Z]+', '', a)
+
+    pattern = re.compile(r'(^\d+[\s_]*)([^\d].+)')
+    match = pattern.match(a)
+    if match:
+        a = match.groups()[-1]
+
+    pattern = re.compile(r'(.+\d+?)_(\d.+)')
+    match = pattern.match(a)
+    if match:
+        a = f"{match.groups()[0]}-{match.groups()[1]}"
+
+    pattern = re.compile(r'(.*?)([(（【]\d+[)）】])$')
+    match = pattern.match(a)
+    if match:
+        a = match.groups()[0]
 
     pattern_copy = re.compile(r"([a-zA-Z0-9\u4e00-\u9fa5].+)(\([0-9]+\)+)+")
     match = pattern_copy.match(a)
     last_part = ''
     if match:
         a, last_part = match.groups()
+        last_part = re.sub(r'[()（）【】]','',last_part)
     a = a + ' ' +  last_part
 
     # 去除英文标点符号
@@ -437,13 +485,14 @@ def process_string(string_a: str):
     a = re.sub('[{}]'.format(zhon.hanzi.punctuation), ' ', a)
 
     # 去除其他
-    r_str = r"\/\\\:\*\?\"\<\>#\.\|\n/\:*?\"<>\|_ ~，、。？！@#￥%……&*（）—+：；《》+~【】"
-    a = re.sub(r_str, " ", a).replace('  ', ' ').strip()
+    r_str = r"[\/\\\:\*\?\"\<\>#\.\|\n/\:*?\"<>\|_ ，、。？！@#￥%……&*（）+：；《》+【】\]\[]"
+    a = re.sub(r_str, " ", a).replace('  ', ' ').replace('--', '-').replace('——', '-').replace('～', '-').strip()
 
     while '  ' in a:
         a = a.replace('  ', ' ')
-
-    return t2s(a)
+    result = t2s(a)
+    # print(f"trans from :  {string_a}=TO==>{result}\n")
+    return result
 
 
 def t2s(string_a):
@@ -500,17 +549,14 @@ def string_sequence (s1, s2):
                 pass
     return True
 
-def move_file(source_directory, destination_directory, filename):
+def move_file(source_directory, destination_directory, source_filename, destination_filename):
     try:
+        # 源文件的完整路径
+        source_file_path = os.path.join(source_directory, source_filename)
+        # 目标文件的完整路径
+        destination_file_path = os.path.join(destination_directory, destination_filename)
         # 创建目录c（如果不存在）
         os.makedirs(destination_directory, exist_ok=True)
-
-        # 源文件的完整路径
-        source_file_path = os.path.join(source_directory, filename)
-
-        # 目标文件的完整路径
-        destination_file_path = os.path.join(destination_directory, filename)
-
         # 移动文件
         shutil.move(source_file_path, destination_file_path)
         # print(f"Moved {source_file_path} to {destination_file_path}")
@@ -519,42 +565,19 @@ def move_file(source_directory, destination_directory, filename):
     except Exception as e:
         print(f"Error moving file: {e}")
 
-def find_files_with_prefix(directory, prefix):
-    """
-    在给定目录中查找以指定前缀开头的所有文件。
+def find_files_in_dir(directory, prefix, filename, filesize):
 
-    Args:
-        directory (str): 要搜索的目录路径。
-        prefix (str): 要匹配的前缀。
-
-    Returns:
-        list: 以指定前缀开头的文件路径列表。
-    """
     matching_files = []
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.startswith(prefix):
+            if file.startswith(prefix) and os.path.getsize(os.path.join(root, file)) > 0:
                 matching_files.append(os.path.join(root, file))
+            elif not re.match(r"^\[\d+\]", file) :
+                if filename.split(' ')[0] in file and os.path.getsize(os.path.join(root, file)) == filesize:
+                    matching_files.append(os.path.join(root, file))
+
     return matching_files
 
-
-def is_exist_files_with_prefix(directory, prefix):
-    """
-    在给定目录中查找以指定前缀开头的所有文件。
-
-    Args:
-        directory (str): 要搜索的目录路径。
-        prefix (str): 要匹配的前缀。
-
-    Returns:
-        list: 以指定前缀开头的文件路径列表。
-    """
-    matching_files = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.startswith(prefix):
-                return True
-    return False
 
 def guess_media_type(file_name_ext: str):
 
@@ -603,15 +626,16 @@ def find_missing_files(folder_path, max_number):
         all_files.add(f"{i:08d}")
 
     # Read the existing file names from the folder
-    if os.path.exists(folder_path):
-        existing_files = set(os.listdir(folder_path))
-        missing_files = all_files - existing_files
-    else:
-        return None
+    existing_files = set(os.listdir(folder_path))
+
+    missing_files = all_files - existing_files
+    for existing_file in existing_files:
+        if os.path.getsize(os.path.join(folder_path, existing_file)) < 1024 * 1024:
+            missing_files.add(existing_file)
 
     # Group consecutive missing file names
     if missing_files is None or len(missing_files) == 0:  # 没有缺失文件
-        return None
+        return [(max_file_number,max_file_number)]
     else:
         start_range = None
         max_range = int(max(missing_files))
@@ -638,17 +662,37 @@ def find_missing_files(folder_path, max_number):
 def merge_files_cat(folder_path, output_file ):
     os.system(f"cat '{folder_path}'/* > {output_file}")
 
-def merge_files_shutil(folder_path, output_file ):
+def merge_files_shutil(folder_path, output_file):
+    # 验证路径是否存在
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"指定的文件夹路径不存在: {folder_path}")
+
     # 获取文件夹中的所有文件
     file_list = os.listdir(folder_path)
     file_list.sort()  # 确保文件按照一致的顺序合并
+
+    # 确认输出文件存在再删除
     if os.path.exists(output_file):
         os.remove(output_file)
-    with open(output_file, 'ab') as output_file:
-        for file_name in file_list:
-            file_path = os.path.join(folder_path, file_name)
-            with open(file_path, 'rb') as source:
-                shutil.copyfileobj(source, output_file)
+
+    time.sleep(1)
+
+    if not os.path.exists(output_file):
+        try:
+            with open(output_file, 'ab') as output_file:
+                for file_name in file_list:
+                    file_path = os.path.join(folder_path, file_name)
+                    # 验证文件路径是否在指定文件夹内
+                    if not os.path.realpath(file_path).startswith(os.path.realpath(folder_path)):
+                        raise ValueError(f"无效的文件路径: {file_path}")
+
+                    with open(file_path, 'rb') as source:
+                        shutil.copyfileobj(source, output_file)
+        except Exception as e:
+            # 清理部分写入的数据
+            if os.path.exists(output_file):
+                os.remove(output_file)
+            raise RuntimeError(f"合并文件时发生错误: {e}")
 
 def merge_files_write(folder_path, output_file, batch_size=1000):
     # 获取文件夹中的所有文件
@@ -666,16 +710,17 @@ def merge_files_write(folder_path, output_file, batch_size=1000):
 
 
 def get_folder_files_size(folder_path):
-    #files_size = []
+    files_size = []
     total_size = 0
     files_count = 0
     for dirpath, dirnames, filenames in os.walk(folder_path):
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
             file_size = os.path.getsize(file_path)
-            #files_size.append((filename,file_size))
+            if file_size < 1024 * 1024:
+                files_size.append((filename,file_size))
             total_size += file_size
             files_count += 1
-    return files_count, total_size
+    return files_count, total_size, files_size
 
 

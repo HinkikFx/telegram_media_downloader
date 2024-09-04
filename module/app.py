@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -382,10 +383,10 @@ class Application:
         self.cloud_drive_config = CloudDriveConfig()
         self.hide_file_name = False
         self.caption_name_dict: dict = {}
-        self.max_concurrent_transmissions: int = 2
+        self.max_concurrent_transmissions: int = 5
         self.web_host: str = "0.0.0.0"
         self.web_port: int = 5000
-        self.max_download_task: int = 2
+        self.max_download_task: int = 5
         self.language = Language.EN
         self.after_upload_telegram_delete: bool = True
         self.web_login_secret: str = ""
@@ -400,8 +401,15 @@ class Application:
         self.if_retry: bool = True
 
         self.forward_limit_call = LimitCall(max_limit_call_times=33)
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+        # self.loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(self.loop)
+
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # 如果没有正在运行的事件循环，则创建一个新的
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
 
         self.executor = ThreadPoolExecutor(
             min(32, (os.cpu_count() or 0) + 4), thread_name_prefix="multi_task"
@@ -807,8 +815,18 @@ class Application:
         #self.app_data["already_download_ids"] = list(self.already_download_ids_set)
 
         if immediate:
-            with open(self.config_file, "w", encoding="utf-8") as yaml_file:
-                _yaml.dump(self.config, yaml_file)
+            bak_config_file = f"{self.config_file}.bak"
+            shutil.copyfile(self.config_file, bak_config_file)
+            try:
+                with open(self.config_file, "w", encoding="utf-8") as yaml_file:
+                    _yaml.dump(self.config, yaml_file)
+            except Exception as e:
+                logger.warning(f"config file save error: {e}")
+                # 如果写入失败，将 a.bak 复制回 a
+                shutil.copyfile(bak_config_file, self.config_file)
+                logger.warning(f"config.bak file is recovered")
+
+            # 写到一半出问题会清空配置文件 更改为先写入临时文件 没问题再改名
 
         #retry 写入数据库 这里可以不写了 因为之前状态都已经记录了
         # if self.app_data.get('chat'):
@@ -861,8 +879,7 @@ class Application:
     def pre_run(self):
         """before run application do"""
         self.cloud_drive_config.pre_run()
-        if self.api_id == '21971696':
-            self.session_file_path = os.path.join(self.session_file_path,'153')
+        self.session_file_path = os.path.join(self.session_file_path, str(self.api_id))
         if not os.path.exists(self.session_file_path):
             os.makedirs(self.session_file_path)
         set_language(self.language)
