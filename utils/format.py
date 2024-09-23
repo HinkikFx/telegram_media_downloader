@@ -2,9 +2,7 @@
 
 import math
 import os
-import shlex
 import time
-
 import regex as re
 import shutil
 import unicodedata
@@ -668,14 +666,34 @@ def merge_files_shutil(folder_path, output_file):
         raise ValueError(f"指定的文件夹路径不存在: {folder_path}")
 
     # 获取文件夹中的所有文件
-    file_list = os.listdir(folder_path)
+    try:
+        file_list = os.listdir(folder_path)
+    except Exception as e:
+        print(f"指定的文件夹中不存在文件: {e}")
+
+    # 当文件列表中只有一个文件时，执行文件复制操作
+    if len(file_list) == 1:
+        # 构建源文件的完整路径
+        source_file = os.path.join(folder_path, file_list[0])
+        # 执行文件复制，将唯一文件内容复制到输出文件
+        shutil.copy(source_file, output_file)
+        # 结束函数执行，确保不会继续处理
+        return
+
     file_list.sort()  # 确保文件按照一致的顺序合并
 
     # 确认输出文件存在再删除
-    if os.path.exists(output_file):
-        os.remove(output_file)
+    if os.path.exists(output_file) and os.path.isfile(output_file):
+        try:
+            # 删除文件
+            os.remove(output_file)
+            print(f"File {output_file} has been removed.")
+        except PermissionError:
+            print(f"Permission denied: Cannot remove file {output_file}.")
+        except Exception as e:
+            print(f"An error occurred while removing the file: {e}")
 
-    time.sleep(1)
+        time.sleep(1)
 
     if not os.path.exists(output_file):
         try:

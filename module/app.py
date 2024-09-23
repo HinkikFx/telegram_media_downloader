@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Union
-
+import collections
 from loguru import logger
 from ruamel import yaml
-
+from ruamel.yaml.comments import CommentedSeq, CommentedMap
 from module.cloud_drive import CloudDrive, CloudDriveConfig
 from module.filter import Filter
 from module.language import Language, set_language
@@ -105,6 +105,23 @@ class QueryHandlerStr:
             str: The string value associated with the given value.
         """
         return QueryHandlerStr._strMap[value]
+
+
+def add_commented_map_to_seq(seq, map_data):
+    """
+    向一个 CommentedSeq 对象中添加一个 CommentedMap 对象。
+
+    :param seq: CommentedSeq 对象
+    :param map_data: 字典，包含要添加的 CommentedMap 数据
+    """
+    if not isinstance(seq, CommentedSeq):
+        raise TypeError("seq 必须是 CommentedSeq 类型")
+
+    if not isinstance(map_data, dict):
+        raise TypeError("map_data 必须是字典类型")
+
+    commented_map = CommentedMap(map_data)
+    seq.append(commented_map)
 
 
 class TaskNode:
@@ -371,7 +388,7 @@ class Application:
         self._chat_id: str = ""
         self.media_types: List[str] = []
         self.file_formats: dict = {}
-        self.proxy: dict = {}
+        self.proxies: List[dict] = []
         self.restart_program = False
         self.config: dict = {}
         self.app_data: dict = {}
@@ -383,7 +400,7 @@ class Application:
         self.cloud_drive_config = CloudDriveConfig()
         self.hide_file_name = False
         self.caption_name_dict: dict = {}
-        self.max_concurrent_transmissions: int = 5
+        self.max_concurrent_transmissions: int = 1
         self.web_host: str = "0.0.0.0"
         self.web_port: int = 5000
         self.max_download_task: int = 5
@@ -398,6 +415,7 @@ class Application:
         )
         self.date_format: str = "%Y-%m"
         self.drop_no_audio_video: bool = False
+        self.enable_download_txt: bool = False
         self.if_retry: bool = True
 
         self.forward_limit_call = LimitCall(max_limit_call_times=33)
@@ -445,8 +463,9 @@ class Application:
         self.if_retry = _config.get("if_retry", True)
 
         # option
-        if _config.get("proxy"):
-            self.proxy = _config["proxy"]
+        if _config.get("proxies"):
+            for proxy in _config["proxies"]:
+                self.proxies.append(proxy)
         if _config.get("restart_program"):
             self.restart_program = _config["restart_program"]
         if _config.get("file_path_prefix"):
@@ -493,12 +512,14 @@ class Application:
 
         # TODO: add check if expression exist syntax error
 
-        self.max_concurrent_transmissions = _config.get(
-            "max_concurrent_transmissions", self.max_concurrent_transmissions
-        )
-
         self.max_download_task = _config.get(
             "max_download_task", self.max_download_task
+        )
+
+        self.max_concurrent_transmissions = self.max_download_task * 5
+
+        self.max_concurrent_transmissions = _config.get(
+            "max_concurrent_transmissions", self.max_concurrent_transmissions
         )
 
         language = _config.get("language", "EN")
@@ -540,6 +561,10 @@ class Application:
             _config, "drop_no_audio_video", self.drop_no_audio_video, bool
         )
 
+        self.enable_download_txt = get_config(
+            _config, "enable_download_txt", self.enable_download_txt, bool
+        )
+
         try:
             date = datetime(2023, 10, 31)
             date.strftime(self.date_format)
@@ -565,6 +590,42 @@ class Application:
                     self.chat_download_config[item["chat_id"]].download_filter = item.get("download_filter", "")
                     self.chat_download_config[item["chat_id"]].upload_telegram_chat_id = item.get("upload_telegram_chat_id", None)
                     self.chat_download_config[item["chat_id"]].group = item.get("group")
+        elif _config.get("chat_id"):
+            # Compatible with lower versions
+            self._chat_id = _config["chat_id"]
+
+            self.chat_download_config[self._chat_id] = ChatDownloadConfig()
+
+            if _config.get("ids_to_retry"):
+                self.chat_download_config[self._chat_id].ids_to_retry = _config[
+                    "ids_to_retry"
+                ]
+                for it in self.chat_download_config[self._chat_id].ids_to_retry:
+                    self.chat_download_config[self._chat_id].ids_to_retry_dict[
+                        it
+                    ] = True
+
+            self.chat_download_config[self._chat_id].last_read_message_id = _config[
+                "last_read_message_id"
+            ]
+            download_filter_dict = _config.get("download_filter", None)
+
+            self.config["chat"] = [
+                {
+                    "chat_id": self._chat_id,
+                    "last_read_message_id": self.chat_download_config[
+                        self._chat_id
+                    ].last_read_message_id,
+                }
+            ]
+
+            if download_filter_dict and self._chat_id in download_filter_dict:
+                self.chat_download_config[
+                    self._chat_id
+                ].download_filter = download_filter_dict[self._chat_id]
+                self.config["chat"][0]["download_filter"] = download_filter_dict[
+                    self._chat_id
+                ]
 
         # pylint: disable = R1733
         for key, value in self.chat_download_config.items():
@@ -638,6 +699,24 @@ class Application:
     def get_file_save_path(
         self, media_type: str, chat_title: str, media_datetime: str
     ) -> str:
+        """Get file save path prefix.
+
+        Parameters
+        ----------
+        media_type: str
+            see config.yaml media_types
+
+        chat_title: str
+            see channel or group title
+
+        media_datetime: str
+            media datetime
+
+        Returns
+        -------
+        str
+            file save path prefix
+        """
 
         try:
             res = self.save_path.get(media_type)
@@ -655,10 +734,6 @@ class Application:
             return res
         else:
             return self.get_file_save_path('default', chat_title, media_datetime)
-
-
-        # update by mouxmoux
-        # 修改保存文件夹路径
 
     def get_file_name(
         self, message_id: int, file_name: Optional[str], caption: Optional[str]
@@ -755,15 +830,14 @@ class Application:
             ]
         idx = 0
         # pylint: disable = R1733
-
         for key, value in self.chat_download_config.items():
-
+            # pylint: disable = W0201
             unfinished_ids = set(value.ids_to_retry)
             max_try = 0
 
             for _idx, _value in value.node.download_status.items():
                 if _idx > max_try:
-                    max_try = _idx  # 记录最大的成功下载
+                    max_try = _idx  # 记录最后一个下载id
                 if  DownloadStatus.SuccessDownload == _value or DownloadStatus.SkipDownload == _value: #成功或需要跳过的从老retry列表删除
                     if _idx in unfinished_ids:
                         unfinished_ids.remove(_idx)
@@ -778,12 +852,6 @@ class Application:
             if idx >= len(self.app_data.get("chat")):
                 self.app_data["chat"].append({})
 
-            # TODO 此处可能有问题 当retry列表有大数字时 哪怕前面没下载也会写一个最大的数
-            if self.chat_download_config[key].ids_to_retry:
-                max_try = max(max(self.chat_download_config[key].ids_to_retry),max_try)
-
-            #self.config["chat"][idx]["last_read_message_id"] = max(self.config["chat"][idx]["last_read_message_id"], max_try, db.get_last_read_message_id(key)) + 1
-            # db.get有问题 原因见之前注释
             try:
                 self.config["chat"][idx]["last_read_message_id"] = max(self.config["chat"][idx]["last_read_message_id"],max_try)
             except:
@@ -828,12 +896,6 @@ class Application:
 
             # 写到一半出问题会清空配置文件 更改为先写入临时文件 没问题再改名
 
-        #retry 写入数据库 这里可以不写了 因为之前状态都已经记录了
-        # if self.app_data.get('chat'):
-        #     for retry_chat in self.app_data.get('chat'):
-        #         retry_chat_id = retry_chat.get('chat_id')
-        #         retry_msg_ids = retry_chat.get('ids_to_retry')
-        #         db.retry_msg_insert_to_db(retry_chat_id, retry_msg_ids)
 
 
     def set_language(self, language: Language):
@@ -859,11 +921,17 @@ class Application:
                     else:
                         chat_id_aka = chat.get('chat_id')
                     if not chat_id_aka in self.chat_download_config:
+
                         self.chat_download_config[chat_id_aka] = ChatDownloadConfig()
                         self.chat_download_config[chat_id_aka].last_read_message_id = 9999999
                         self.chat_download_config[chat_id_aka].download_filter = ''
                         self.chat_download_config[chat_id_aka].upload_telegram_chat_id = None
                         self.chat_download_config[chat_id_aka].group = None
+
+                        map_data = {'chat_id': chat_id_aka,
+                                    'last_read_message_id': self.chat_download_config[chat_id_aka].last_read_message_id,
+                                    'download_filter': self.chat_download_config[chat_id_aka].download_filter}
+                        add_commented_map_to_seq(self.config['chat'], map_data)
 
                     self.chat_download_config[chat_id_aka].ids_to_retry = chat.get('ids_to_retry', [])
                     for it_str in self.chat_download_config[chat_id_aka].ids_to_retry:

@@ -1,147 +1,176 @@
-#147
-#api_hash: 8b71c214b961905539c966b866bb4499
-#api_id: 27545157
-#bot_token: 5598238561:AAFKnE3bxT5IgknfVyVCsdfxxkW1CJDw-nA
-
 #153
-api_hash: 6f6d1ab0323a9e23ad5a7da6267e7f45
-api_id: 21971696
-bot_token: 6147440310:AAHDmwkypScL5qYaX_qI-bEeGMr1gOt5tGg
+api_hash: 8b71c214b961905539c966b866bb4499
+api_id: 27545157
+bot_token: 5598238561:AAFKnE3bxT5IgknfVyVCsdfxxkW1CJDw-nA
+
+
+#147
+#api_hash: 88f647d70da0b07ba9fcf69365f7761c
+#api_id: 16852383
+#bot_token: 1281281363:AAF5CcmygZtZT0Xbnd1xRRNN7CiZgARA76c
 
 chat:
-#- chat_id: AV22918
-#  last_read_message_id: 101
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: sexbook999
-#  last_read_message_id: 2657
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: TG672
-#  last_read_message_id: 2784
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: tghwxsdq
-#  last_read_message_id: 932
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: xiaohuangshu58
-#  last_read_message_id: 145
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: yellowxiaoshuo
-#  last_read_message_id: 32387
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: boluobaohezuqun
-#  last_read_message_id: 6779
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: chengrenshuwu
-#  last_read_message_id: 34810
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: Dk18book
-#  last_read_message_id: 9971
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: g_qwxs
-#  last_read_message_id: 23608
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: happylibrary
-#  last_read_message_id: 3080
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: Hxiaowen
-#  last_read_message_id: 10997
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: JinPingMei
-#  last_read_message_id: 20028
-#  download_filter: file_extension == '.txt' or file_extension == 'txt'
-#- chat_id: shenyin1
-#  last_read_message_id: 3784
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmr38zz
-#  last_read_message_id: 635
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmrcabian
-#  last_read_message_id: 52483
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmrebook18
-#  last_read_message_id: 2871
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmrforme
-#  last_read_message_id: 6496
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmrforus
-#  last_read_message_id: 4434
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmrgay
-#  last_read_message_id: 13578
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: asmryinshenggu
-#  last_read_message_id: 49023
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: bfyyyds03
-#  last_read_message_id: 609
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: eszmldj
-#  last_read_message_id: 974
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: FuckyouWasteTrump
-#  last_read_message_id: 6820
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: cn_asmr
-#  last_read_message_id: 3210
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: cp3766
-#  last_read_message_id: 13103
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: Hentaii_asmr
-#  last_read_message_id: 7139
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: itssteinsgate
-#  last_read_message_id: 2703
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: jiaochuang
-#  last_read_message_id: 51469
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: lygasmr
-#  last_read_message_id: 2315
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: niceasmr_JLQ
-#  last_read_message_id: 39852
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: niceasmrs
-#  last_read_message_id: 18910
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: ysxs6
-#  last_read_message_id: 14163
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: ysxs888
-#  last_read_message_id: 1731
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: zsygrasmr
-#  last_read_message_id: 17044
-#  download_filter: media_type == 'audio' && media_duration >= 300 no_jap_kor
-#- chat_id: YuZuKitty6
-#  last_read_message_id: 34
-#  download_filter: media_type == 'video' && media_duration >= 300
-#- chat_id: Nana_taipei520
-#  last_read_message_id: 13421
-#  download_filter: media_type == 'video' && media_duration >= 300
-#- chat_id: qiobnxingcai6
-#  last_read_message_id: 1
-#  download_filter: media_type == 'video' && media_duration >= 300
-#- chat_id: HongKongDoll2233
-#  last_read_message_id: 1
-#  download_filter: media_type == 'video' && media_duration >= 300
-#- chat_id: nanashipin
-#  last_read_message_id: 1
-#  download_filter: media_type == 'video' && media_duration >= 300
-file_formats:
-  audio:
-  - all
-  document:
-  - all
-  video:
-  - all
-file_path_prefix:
-- chat_title
-#upload_drive:
-#  enable_upload_file: false
-#  remote_dir: moux-docu:/telegram
-#  rclone_path: /usr/bin/rclone
+- chat_id: AV2291
+  last_read_message_id: 13925
+  download_filter: media_type == 'document'
+- chat_id: sexbook999
+  last_read_message_id: 2671
+  download_filter: media_type == 'document'
+- chat_id: TG672
+  last_read_message_id: 2784
+  download_filter: media_type == 'document'
+- chat_id: tghwxsdq
+  last_read_message_id: 65242
+  download_filter: media_type == 'document'
+- chat_id: xiaohuangshu58
+  last_read_message_id: 156
+  download_filter: media_type == 'document'
+- chat_id: yellowxiaoshuo
+  last_read_message_id: 54322
+  download_filter: media_type == 'document'
+- chat_id: boluobaohezuqun
+  last_read_message_id: 7448
+  download_filter: media_type == 'document'
+- chat_id: Dk18book
+  last_read_message_id: 10980
+  download_filter: media_type == 'document'
+- chat_id: g_qwxs
+  last_read_message_id: 25873
+  download_filter: media_type == 'document'
+- chat_id: happylibrary
+  last_read_message_id: 3467
+  download_filter: media_type == 'document' && media_file_size <= 1024 * 1024 * 100
+- chat_id: Hxiaowen
+  last_read_message_id: 10997
+  download_filter: media_type == 'document'
+- chat_id: JinPingMei
+  last_read_message_id: 20321
+  download_filter: media_type == 'document'
+- chat_id: libraryforalls
+  last_read_message_id: 42726
+  download_filter: media_type == 'document' && media_file_size <= 1024 * 1024 * 100
+- chat_id: shenyin1
+  last_read_message_id: 4615
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: 1688003518
+  last_read_message_id: 115896
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: 1835229500
+  last_read_message_id: 64221
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmr38zz
+  last_read_message_id: 635
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrcabian
+  last_read_message_id: 73419
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrebook18
+  last_read_message_id: 18448
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrforme
+  last_read_message_id: 6450
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrforus
+  last_read_message_id: 6045
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrgay
+  last_read_message_id: 15223
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmryinshenggu
+  last_read_message_id: 50962
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: bfyyyds03
+  last_read_message_id: 612
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: eszmldj
+  last_read_message_id: 988
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: FuckyouWasteTrump
+  last_read_message_id: 7713
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: CNASMR
+  last_read_message_id: 3669
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: cp3766
+  last_read_message_id: 14832
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: 1274270717
+  last_read_message_id: 9163
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: itssteinsgate
+  last_read_message_id: 2923
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: jiaochuang
+  last_read_message_id: 388936
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: lygasmr
+  last_read_message_id: 8215
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: niceasmr_JLQ
+  last_read_message_id: 44549
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: niceasmrs
+  last_read_message_id: 23587
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: ysxs6
+  last_read_message_id: 16103
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: ysxs888
+  last_read_message_id: 1751
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: zsygrasmr
+  last_read_message_id: 17837
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: asmrssos
+  last_read_message_id: 15063
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: ASMRLNGC
+  last_read_message_id: 26197
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: koenbs
+  last_read_message_id: 16379
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: bfyfml
+  last_read_message_id: 2450
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: ASMR1
+  last_read_message_id: 2549
+  download_filter: media_type == 'audio' && media_duration >= 600 no_jap_kor
+- chat_id: YuZuKitty6
+  last_read_message_id: 178
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: Nana_taipei520
+  last_read_message_id: 14371
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: wanoujiejie520
+  last_read_message_id: 17048
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: qiobnxingcai6
+  last_read_message_id: 17986
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: HongKongDoll2233
+  last_read_message_id: 1652
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: HongKongDollWanoujiejie
+  last_read_message_id: 27053
+  download_filter: media_type == 'video' && media_duration >= 1200
+- chat_id: nanashipin
+  last_read_message_id: 108
+  download_filter: media_type == 'video' && media_duration >= 1200
+
+# 我们将ids_to_retry移到data.yaml
+- chat_id: 1388201875
+  last_read_message_id: 9999999
+  download_filter: ''
+- chat_id: 1433151763
+  last_read_message_id: 9999999
+  download_filter: ''
+- chat_id: 1666354477
+  last_read_message_id: 9999999
+  download_filter: ''
+- chat_id: footjoba9
+  last_read_message_id: 9999999
+  download_filter: ''
 media_types:
 - audio
 - photo
@@ -149,30 +178,60 @@ media_types:
 - document
 #- voice
 #- video_note
+file_formats:
+  photo:
+  - all
+  audio:
+  - mp3
+  - ogg
+  - aac
+  - flac
+  - m4a
+  document:
+  - epub
+  - txt
+  - mobi
+  - azw3
+  - azw
+  video:
+  - all
+file_path_prefix: []
+#- chat_title
+#- media_datetime
+#- chat_title
 # in linux please use /
 # save_path: E:\github\telegram_media_downloader
+# save_path: /mnt/onedrive/moux-docu/telegram
 save_path:
-  video: /Users/wuyun/Downloads/Other/moux-docu/telegram
-  audio: /Users/wuyun/Downloads/Other/moux-docu/telegram
-  photo: /Users/wuyun/Downloads/Other/moux-docu/telegram
-  document: /Users/wuyun/Downloads/Other/moux-docu/telegram
-
-temp_save_path: /Users/wuyun/Downloads/Other/Telegram/temp
-
+  video: /Users/wuyun/Downloads/mnt/WEB/NSFW/CAV-Normal/telegram
+  audio: /Users/wuyun/Downloads/mnt/WEB/NSFW/docu/telegram/Asmr
+  photo: /Users/wuyun/Downloads/mnt/WEB/NSFW/images2/telegram
+  document: /Users/wuyun/Downloads/mnt/WEB/NSFW/docu/telegram/Books
+  default: /Users/wuyun/Downloads/mnt/WEB/NSFW/upload/telegram
+#temp_save_path: /Users/wuyun/Downloads/mnt/tmp/tmd/temp_save_path
+temp_save_path: /Users/wuyun/Downloads/mnt/Local/DSM/share/tmp/tmd/temp_save_path/telegram
 file_name_prefix:
 - message_id
 - file_name
 max_download_task: 2
+max_concurrent_transmissions: 2
 allowed_user_ids:
 - me
 - '@Mouxwu'
 - '@bwuyun'
-proxy:
-  hostname: 127.0.0.1
-  port: 62808
+proxies:
+- hostname: 10.50.0.220
+  port: 55084
+  scheme: socks5
+- hostname: 10.50.0.220
+  port: 55086
+  scheme: socks5
+- hostname: 10.50.0.220
+  port: 55088
   scheme: socks5
 language: ZH
 date_format: '%Y-%m'
 web_host: 0.0.0.0
 web_port: 25555
 web_login_secret: '!@!%WYUn'
+if_retry: true

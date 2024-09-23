@@ -4,7 +4,7 @@ import asyncio
 import os
 from datetime import datetime
 from typing import Callable, List, Union
-
+import random
 import pyrogram
 from loguru import logger
 from pyrogram import types
@@ -140,13 +140,15 @@ class DownloadBot:
         download_chat_task: Callable,
     ):
         """Start bot"""
+        if app.proxies:
+            proxy = random.choice(app.proxies)
         self.bot = pyrogram.Client(
             app.application_name + "_bot",
             api_hash=app.api_hash,
             api_id=app.api_id,
             bot_token=app.bot_token,
             workdir=app.session_file_path,
-            proxy=app.proxy,
+            proxy=proxy,
         )
 
         # 命令列表
@@ -179,7 +181,6 @@ class DownloadBot:
             ),
             types.BotCommand("set_language", _t("Set language")),
             types.BotCommand("stop", _t("Stop bot download or forward")),
-            types.BotCommand("reload", "reload config to restart"),
         ]
 
         self.app = app
@@ -291,14 +292,6 @@ class DownloadBot:
         )
 
         self.bot.add_handler(
-            MessageHandler(
-                reload,
-                filters=pyrogram.filters.command(["reload"])
-                        & pyrogram.filters.user(self.allowed_user_ids),
-            )
-        )
-
-        self.bot.add_handler(
             CallbackQueryHandler(
                 on_query_handler, filters=pyrogram.filters.user(self.allowed_user_ids)
             )
@@ -379,6 +372,7 @@ async def send_help_str(client: pyrogram.Client, chat_id):
     msg = (
         f"`\n🤖 {_t('Telegram Media Downloader')}\n"
         f"🌐 {_t('Version')}: {utils.__version__}`\n"
+        #f"{latest_release_str}\n"
         f"{_t('Available commands:')}\n"
         f"/help - {_t('Show available commands')}\n"
         f"/get_info - {_t('Get group and user info from message link')}\n"
@@ -1113,12 +1107,7 @@ async def stop_task(
             f"{_t('Stop')} {_t(task_type.name)}...",
         )
         _bot.stop_task(task_id)
-async def reload(
-    client: pyrogram.Client, query: pyrogram.types.CallbackQuery
-):
-    #todo 重新载入配置以check跟踪的频道
-    await start_download_bot
-    return
+
 
 async def on_query_handler(
     client: pyrogram.Client, query: pyrogram.types.CallbackQuery

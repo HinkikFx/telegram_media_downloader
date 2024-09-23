@@ -7,14 +7,14 @@ import re
 from enum import Enum
 import pyrogram
 from loguru import logger
-
+import random
 from typing import AsyncGenerator, Optional
-
+from rich.logging import RichHandler
 from tqdm.asyncio import tqdm
 
 from module.app import Application, ChatDownloadConfig, DownloadStatus, TaskNode
 from module.bot import start_download_bot, stop_download_bot
-from module.download_stat import update_download_status, update_download_status_simple
+from module.download_stat import update_download_status
 from module.get_chat_history_v2 import get_chat_history_v2
 from module.language import _t
 from module.pyrogram_extension import (
@@ -44,15 +44,20 @@ from utils.meta_data import MetaData
 
 from module.sqlmodel import Downloaded
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler()],
+)
+
 CONFIG_NAME = "config.yaml"
 DATA_FILE_NAME = "data.yaml"
 APPLICATION_NAME = "media_downloader"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 
 queue_maxsize = 1000
-queue: asyncio.Queue = asyncio.Queue(maxsize = queue_maxsize)
-queue_rename: asyncio.Queue = asyncio.Queue(maxsize = queue_maxsize)
-
+queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
 
 RETRY_TIME_OUT = 3
 
@@ -60,8 +65,6 @@ CHUNK_MIN = 10
 
 similar_set = 0.90
 sizerange_min = 0.01
-
-test_filename = False
 
 logging.getLogger("pyrogram.session.session").addFilter(LogFilter())
 logging.getLogger("pyrogram.client").addFilter(LogFilter())
@@ -71,10 +74,11 @@ logging.getLogger("pyrogram").setLevel(logging.WARNING)
 db = Downloaded()
 
 
-
 def check_download_finish(media_size: int, download_path: str, ui_file_name: str, chunk_count: int) -> bool:
     # 类型检查
-    if not isinstance(media_size, int) or not isinstance(download_path, str) or not isinstance(ui_file_name, str) or not isinstance(chunk_count, int):
+    if not isinstance(media_size, int) or not isinstance(download_path, str) or not isinstance(ui_file_name,
+                                                                                               str) or not isinstance(
+        chunk_count, int):
         raise TypeError("Invalid argument types")
 
     # 边界条件检查
@@ -119,44 +123,40 @@ def merge_chunkfile(folder_path: str, output_file: str, chunk_count: int, file_s
         raise ValueError(f"Invalid method '{method}'. Supported methods are 'cat', 'write', and 'shutil'.")
 
     # 检查文件是否存在且大小正确
-    if _is_exist(output_file) and os.path.getsize(output_file) == file_size:
-        return True
-    else:
-        # 清理临时文件
-        try:
-            os.remove(output_file)
-        except FileNotFoundError:
-            pass
-        return False
+    while not _is_exist(output_file) and os.path.getsize(output_file) != file_size:
+        time.sleep(1)
+    return True
+
+
 
 def _check_timeout(retry: int, _: int):
-
     if retry >= 4:
         return True
     return False
+
 
 def _is_exist(file_path: str) -> bool:
     if not file_path:
         return False
     return os.path.isfile(file_path)
 
-class Msg_db_Status(Enum):
 
-    DB_No_Exist = 0 # 数据库中不存在
-    DB_Exist = 1 # 数据库中存在
+class Msg_db_Status(Enum):
+    DB_No_Exist = 0  # 数据库中不存在
+    DB_Exist = 1  # 数据库中存在
     DB_Downloading = 2  # 数据库中下载中
-    DB_Aka_Exist = 3 # 数据库中等价内容存在
+    DB_Aka_Exist = 3  # 数据库中等价内容存在
     DB_Aka_Downloading = 4  # 数据库中等价内容下载中
     DB_Passed = 5  # 数据库中等价内容存在
 
-class Msg_file_Status(Enum):
 
-    File_No_Exist = 0 # 文件系统中不存在
-    File_Exist = 1 # 文件系统中存在
+class Msg_file_Status(Enum):
+    File_No_Exist = 0  # 文件系统中不存在
+    File_Exist = 1  # 文件系统中存在
     File_Aka_Exist = 2  # 文件系统中等价文件存在
 
-def _get_msg_db_status(msg_dict: dict) :
 
+def _get_msg_db_status(msg_dict: dict):
     msg_chat_id = msg_dict.get('chat_id')
     try:
         msg_db_status = db.getStatus(msg_chat_id, msg_dict.get('message_id'))
@@ -166,14 +166,14 @@ def _get_msg_db_status(msg_dict: dict) :
             exc_info=True,
         )
 
-    if msg_db_status == 0: #数据库里没这条数据
-        db_files = db.get_similar_files(msg_dict,similar_set,sizerange_min,[1,2]) #看看是否有等价内容数据 4因为依附于1 暂时不管
+    if msg_db_status == 0:  #数据库里没这条数据
+        db_files = db.get_similar_files(msg_dict, similar_set, sizerange_min, [1, 2])  #看看是否有等价内容数据 4因为依附于1 暂时不管
         if db_files and len(db_files) >= 1:
             for db_file in db_files:
-                if db_file.status == 1 or db_file.status == 4: #等价存在
+                if db_file.status == 1 or db_file.status == 4:  #等价存在
                     msg_db_status = Msg_db_Status.DB_Aka_Exist
                     break
-                elif db_file.status == 2: #等价下载中
+                elif db_file.status == 2:  #等价下载中
                     msg_db_status = Msg_db_Status.DB_Aka_Downloading
                     break
         else:
@@ -187,41 +187,42 @@ def _get_msg_db_status(msg_dict: dict) :
     elif msg_db_status == 3:
         msg_db_status = Msg_db_Status.DB_Passed
 
-
     return msg_db_status
 
 
-
-
-async def _get_msg_file_status(msg_dict: dict) :
+async def _get_msg_file_status(msg_dict: dict):
     msg_file_status = Msg_file_Status.File_No_Exist  # 文件不存在
     if not msg_dict.get('file_fullname'):
-        return msg_file_status
-    if _is_exist(msg_dict.get('file_fullname')) and os.path.getsize(msg_dict.get('file_fullname')) > 0:
-        msg_file_status = Msg_file_Status.File_Exist #文件存在
+        raise TypeError("Invalid argument: file_fullname")
+    # if _is_exist(msg_dict.get('file_fullname')) and os.path.getsize(msg_dict.get('file_fullname')) > 0:
+    if _is_exist(msg_dict.get('file_fullname')):
+        return Msg_file_Status.File_Exist  #文件存在
     else:
         # 根据前缀找文件
         file_dir = os.path.dirname(msg_dict.get('file_fullname'))
         filename_pre = f"[{msg_dict.get('message_id')}]"
         files = find_files_in_dir(file_dir, filename_pre, msg_dict.get('title'), msg_dict.get('media_size'))
-        for file in files: #
-            msg_file_status = Msg_file_Status.File_Exist #文件存在
-
-            # 重命名线程 有 bug ：程序终端会漏掉待命名文件 暂不使用
+        # 重命名线程 有 bug ：程序终端会漏掉待命名文件 暂不使用
+        # for file in files:  #
+        #     msg_file_status = Msg_file_Status.File_Exist  #文件存在
             # if file.lower() != msg_dict.get('file_fullname').lower() :
             #     rename_dict = {
             #         'oldfilename': file,
             #         'newfilename': msg_dict.get('file_fullname'),
             #     }
             #     await queue_rename.put(rename_dict)
-            return msg_file_status
-    return msg_file_status
+            # return msg_file_status
+        if len(files) > 0:
+            return Msg_file_Status.File_Exist
+        else:
+            return Msg_file_Status.File_No_Exist
+
+
 
 # pylint: disable = R0912
 def _get_media_meta(
-    message: pyrogram.types.Message
+        message: pyrogram.types.Message
 ) -> dict:
-
     media_dict = {}
     msg_time = ''
 
@@ -236,13 +237,24 @@ def _get_media_meta(
         msg_real_message_id = message.id
         msg_real_chat_title = validate_title(message.chat.title)
 
+        msg_from_chat_id = 0
+        msg_from_chat_username = ''
+        msg_from_message_id = 0
+        msg_from_chat_title = ''
         msg_from = False  # 是否转发的信息
+
         if message.forward_from_chat and message.forward_from_chat.id and message.forward_from_message_id:
             msg_from_chat_id = 0 - message.forward_from_chat.id - 1000000000000
             msg_from_chat_username = message.forward_from_chat.username
             msg_from_message_id = message.forward_from_message_id
             msg_from_chat_title = validate_title(message.forward_from_chat.title)
             msg_from = True
+
+            if f"@{msg_real_chat_username}" in app.allowed_user_ids:
+                msg_real_chat_id = msg_from_chat_id
+                msg_real_chat_username = msg_from_chat_username
+                msg_real_message_id = msg_from_message_id
+                msg_real_chat_title = msg_from_chat_title
 
         if message.date:
             msg_time = message.date.strftime("%Y-%m-%d %H:%M")
@@ -296,41 +308,46 @@ def _get_media_meta(
             msg_file_onlyname = process_string(msg_filename)
             msg_file_ext = default_ext
         msg_title = f"{msg_file_onlyname}"
-        if msg_caption and msg_caption != '': #caption 存在
+        if msg_caption and msg_caption != '':  #caption 存在
             if re.search(r"作品.+?\s(.+?)\s", msg_caption):
                 name_from_caption = re.search(r"作品.+?\s(.+?)\s", msg_caption).groups()[0]
                 msg_title = f"{msg_title}({name_from_caption})"
             else:
                 name_from_caption = ''
-            if 'telegram' in msg_filename.lower() or re.sub(r'[._\-\s]', '',msg_file_onlyname).isdigit() or name_from_caption: # 文件名有问题
+
+            if 'telegram' in msg_filename.lower() or '电报搜索' in msg_filename or '更多视频' in msg_filename or 'pandatv' in msg_filename.lower() or re.sub(
+                    r'[._\-\s]', '',
+                    msg_file_onlyname).isdigit() or name_from_caption:  # 文件名有问题
                 if name_from_caption:
-                    msg_filename = app.get_file_name(msg_real_message_id,f"{msg_title}.{msg_file_ext}", msg_caption)
+                    msg_filename = app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}", msg_caption)
                 else:
-                    msg_title = f"{msg_caption[:20]}"
-                    msg_filename = app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}",msg_caption)
+                    msg_title = f"{process_string(msg_caption)}"
+                    msg_filename = app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}", msg_caption)
             else:
                 msg_filename = validate_title(
                     app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}", msg_caption))
         else:
-            msg_filename = validate_title(app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}", msg_caption))
+            msg_filename = validate_title(
+                app.get_file_name(msg_real_message_id, f"{msg_title}.{msg_file_ext}", msg_caption))
 
         if not msg_real_chat_username or msg_real_chat_username == '':
             subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_id}")
+            subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
         else:
             subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_username}")
+            subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
 
-        subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
-
-        file_save_url = os.path.join(app.get_file_save_path(msg_type, msg_real_chat_title, msg_time), subdir, msg_filename)
+        file_save_url = os.path.join(app.get_file_save_path(msg_type, msg_real_chat_title, msg_time), subdir,
+                                     msg_filename)
         temp_save_url = os.path.join(app.temp_save_path, subdir, msg_filename)
 
         if not msg_filename or 'None' in file_save_url:
             if not msg_real_chat_username:
                 logger.error(f"[{msg_real_chat_id}]{msg_real_message_id}: ", exc_info=True, )
             else:
-                logger.error(f"[{msg_real_chat_username}]{msg_real_message_id}: ",exc_info=True,)
+                logger.error(f"[{msg_real_chat_username}]{msg_real_message_id}: ", exc_info=True, )
 
-        if msg_from: #
+        if msg_from:  #
             media_dict = {
                 'chat_id': msg_real_chat_id,
                 'message_id': msg_real_message_id,
@@ -383,10 +400,9 @@ def _get_media_meta(
     return media_dict
 
 
-
 async def add_download_task(
-    message: pyrogram.types.Message,
-    node: TaskNode,
+        message: pyrogram.types.Message,
+        node: TaskNode,
 ):
     if message.empty:
         return False
@@ -396,20 +412,20 @@ async def add_download_task(
     msg_dict = _get_media_meta(message)
     msg_db_status = _get_msg_db_status(msg_dict)
 
-    if msg_db_status == Msg_db_Status.DB_Exist: # 数据库有完成
+    if msg_db_status == Msg_db_Status.DB_Exist:  # 数据库有完成
         msg_file_status = await _get_msg_file_status(msg_dict)
         if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
             # 文件存在
-            node.download_status[message.id] = DownloadStatus.SkipDownload
+            node.download_status[message.id] = DownloadStatus.SuccessDownload
             return
         else:
             # 文件没了
-            To_Down = True #重新下载
-    elif msg_db_status == Msg_db_Status.DB_Aka_Exist: # 数据库有 标记为与其他等价
+            To_Down = True  #重新下载
+    elif msg_db_status == Msg_db_Status.DB_Aka_Exist:  # 数据库有 标记为与其他等价
         # 文件有没有暂时不管
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
-    elif msg_db_status == Msg_db_Status.DB_Downloading: # 数据库标识为正在下载
+    elif msg_db_status == Msg_db_Status.DB_Downloading:  # 数据库标识为正在下载
         msg_file_status = await _get_msg_file_status(msg_dict)
         if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
             # 文件存在
@@ -420,19 +436,19 @@ async def add_download_task(
         else:
             # 文件没了
             To_Down = True  # 重新下载
-    elif msg_db_status == Msg_db_Status.DB_Aka_Downloading: # 数据库有其他等价文件在下载
+    elif msg_db_status == Msg_db_Status.DB_Aka_Downloading:  # 数据库有其他等价文件在下载
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
-    elif msg_db_status == Msg_db_Status.DB_No_Exist: # 数据库没有
+    elif msg_db_status == Msg_db_Status.DB_No_Exist:  # 数据库没有
         msg_file_status = await _get_msg_file_status(msg_dict)
-        if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:# 文件有
+        if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:  # 文件有
             node.download_status[message.id] = DownloadStatus.SuccessDownload
             msg_dict['status'] = 1
-            db.insert_into_db(msg_dict) # 补写入数据库
+            db.insert_into_db(msg_dict)  # 补写入数据库
             return
-        else:# 文件也没
+        else:  # 文件也没
             To_Down = True
-    elif msg_db_status == Msg_db_Status.DB_Passed: #标记为人为跳过
+    elif msg_db_status == Msg_db_Status.DB_Passed:  #标记为人为跳过
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
 
@@ -442,7 +458,7 @@ async def add_download_task(
 
     node.download_status[message.id] = DownloadStatus.Downloading
     await queue.put((message, node))
-    msg_dict['status'] = 2   # 写入数据库 记录进入下载队列
+    msg_dict['status'] = 2  # 写入数据库 记录进入下载队列
     db.insert_into_db(msg_dict)
 
     if not msg_dict.get('chat_username') or msg_dict.get('chat_username') == '':
@@ -454,11 +470,43 @@ async def add_download_task(
 
     return True
 
+
+# async def save_msg_to_file(
+#     app, chat_id: Union[int, str], message: pyrogram.types.Message
+# ):
+#     """Write message text into file"""
+#     dirname = validate_title(
+#         message.chat.title if message.chat and message.chat.title else str(chat_id)
+#     )
+#     datetime_dir_name = message.date.strftime(app.date_format) if message.date else "0"
+#
+#     file_save_path = app.get_file_save_path("msg", dirname, datetime_dir_name)
+#     file_name = os.path.join(
+#         app.temp_save_path,
+#         file_save_path,
+#         f"{app.get_file_name(message.id, None, None)}.txt",
+#     )
+#
+#     os.makedirs(os.path.dirname(file_name), exist_ok=True)
+#
+#     if _is_exist(file_name):
+#         return DownloadStatus.SkipDownload, None
+#
+#     with open(file_name, "w", encoding="utf-8") as f:
+#         f.write(message.text or "")
+#
+#     return DownloadStatus.SuccessDownload, file_name
+
+
 async def download_task(
-    client: pyrogram.Client, message: pyrogram.types.Message, node: TaskNode
+        client: pyrogram.Client, message: pyrogram.types.Message, node: TaskNode
 ):
+    """Download and Forward media"""
 
     download_status, file_name = await download_media(client, message, node)
+
+    # if app.enable_download_txt and message.text and not message.media:
+    #     download_status, file_name = await save_msg_to_file(app, node.chat_id, message)
 
     if not node.bot:
         app.set_download_id(node, message.id, download_status)
@@ -479,8 +527,8 @@ async def download_task(
 
     # rclone upload
     if (
-        not node.upload_telegram_chat_id
-        and download_status is DownloadStatus.SuccessDownload
+            not node.upload_telegram_chat_id
+            and download_status is DownloadStatus.SuccessDownload
     ):
         if await app.upload_file(file_name):
             node.upload_success_count += 1
@@ -493,9 +541,7 @@ async def download_task(
     )
 
 
-
 def save_chunk_to_file(chunk, file_path, file_name):
-
     try:
         # 创建目录
         os.makedirs(file_path, exist_ok=True)
@@ -518,16 +564,18 @@ def save_chunk_to_file(chunk, file_path, file_name):
         print(f"Error occurred: {e}")
         return False
 
+
 @record_download_status
 async def download_media(
-    client: pyrogram.client.Client,
-    message: pyrogram.types.Message,
-    node: TaskNode,
+        client: pyrogram.client.Client,
+        message: pyrogram.types.Message,
+        node: TaskNode,
 ):
     media_dict = _get_media_meta(message)
     msg_file_status = await _get_msg_file_status(media_dict)
     if msg_file_status == Msg_file_Status.File_Exist:
-        await update_download_status(media_dict.get('media_size'), media_dict.get('media_size'), message.id, media_dict.get('filename'),
+        await update_download_status(media_dict.get('media_size'), media_dict.get('media_size'), message.id,
+                                     media_dict.get('filename'),
                                      time.time(),
                                      node, client)
         media_dict['status'] = 1
@@ -555,13 +603,12 @@ async def download_media(
     if app.hide_file_name:
         ui_file_name = f"****{os.path.splitext(file_name.split('/')[0])}"
 
-
     for retry in range(3):
         try:
             temp_file_path = os.path.dirname(temp_file_name)
             chunk_dir = f"{temp_file_path}/{message_id}_chunk"
 
-            if media_size < 1024 * 1024 * CHUNK_MIN: # 小于CHUNK_MIN M的就用单一文件下载
+            if media_size < 1024 * 1024 * CHUNK_MIN:  # 小于CHUNK_MIN M的就用单一文件下载
                 chunk_count = 1
                 chunk_filename = os.path.join(chunk_dir, "00000000")
                 if os.path.exists(chunk_dir):
@@ -600,7 +647,7 @@ async def download_media(
                 except Exception as e:
                     logger.exception(f"{e}")
                     pass
-            else: #大文件 采用分快下载模式
+            else:  #大文件 采用分快下载模式
                 if not os.path.exists(chunk_dir):
                     os.makedirs(chunk_dir, exist_ok=True)
                 else:
@@ -648,11 +695,11 @@ async def download_media(
                             pass
 
             #判断一下是否下载完成
-            if chunk_dir and os.path.exists(chunk_dir): #chunk_dir存在
-                if check_download_finish(media_size, chunk_dir, ui_file_name, chunk_count): # 大小数量一致
+            if chunk_dir and os.path.exists(chunk_dir):  #chunk_dir存在
+                if check_download_finish(media_size, chunk_dir, ui_file_name, chunk_count):  # 大小数量一致
                     try:
                         if merge_chunkfile(folder_path=chunk_dir, output_file=file_name, chunk_count=chunk_count,
-                                        file_size=media_size, method='shutil'):
+                                           file_size=media_size, method='shutil'):
                             # await asyncio.sleep(RETRY_TIME_OUT)
                             if _is_exist(file_name) and os.path.getsize(file_name) == media_size:
                                 shutil.rmtree(chunk_dir)
@@ -730,16 +777,7 @@ def _check_config() -> bool:
 
     return True
 
-async def rename_worker():
-    while app.is_running:
-        try:
-            rename_dict = await queue_rename.get()
-            oldfilename = rename_dict.get('oldfilename')
-            newfilename = rename_dict.get('newfilename')
-            os.rename(oldfilename, newfilename)
-            # print(f"renamed: {oldfilename}===>{newfilename}")
-        except Exception as e:
-            logger.exception(f"{e}")
+
 async def worker(client: pyrogram.client.Client):
     """Work for download task"""
     while app.is_running:
@@ -758,6 +796,7 @@ async def worker(client: pyrogram.client.Client):
         except Exception as e:
             logger.exception(f"{e}")
 
+
 def need_skip_message(message, chat_download_config):
     try:
         # Case 1 不是媒体类型就跳过
@@ -768,7 +807,7 @@ def need_skip_message(message, chat_download_config):
         meta_data = MetaData()
         set_meta_data(meta_data, message, '')
         if meta_data.file_extension and meta_data.file_extension != '' and (
-        not 'all' in app.file_formats[meta_data.media_type]) and (
+                not 'all' in app.file_formats[meta_data.media_type]) and (
                 not meta_data.file_extension.replace('.', '').lower() in app.file_formats[meta_data.media_type]):
             return True
         if not app.exec_filter(chat_download_config, meta_data):
@@ -780,48 +819,10 @@ def need_skip_message(message, chat_download_config):
         logger.exception(f"{e}")
 
 
-async def download_chat_task_test(
-    client: pyrogram.Client,
-    chat_download_config: ChatDownloadConfig,
-    node: TaskNode,
-):
-    try:
-
-        if str(node.chat_id).isdigit():
-            real_chat_id = str(0 - node.chat_id - 1000000000000)
-        else:
-            real_chat_id = node.chat_id
-
-        chat_download_config.node = node
-
-        """Download all task"""
-        messages_iter = get_chat_history_v2(
-            client,
-            real_chat_id,
-            limit=node.limit,
-            max_id=node.end_offset_id,
-            offset_id=chat_download_config.last_read_message_id,
-            reverse=True,
-        )
-        async for message in messages_iter:  # type: ignore
-            if need_skip_message(message, chat_download_config):  # 不在下载范围内
-                node.download_status[message.id] = DownloadStatus.SkipDownload
-                continue
-            else:
-                msg = _get_media_meta(message)
-                new_filename= re.sub(r'\[\d+\]', '', msg.get('filename'))
-                logger.info(f"{msg.get('old_filename')}======={new_filename}")
-
-
-
-    except Exception as e:
-        logger.exception(f"{e}")
-
-
 async def download_chat_task(
-    client: pyrogram.Client,
-    chat_download_config: ChatDownloadConfig,
-    node: TaskNode,
+        client: pyrogram.Client,
+        chat_download_config: ChatDownloadConfig,
+        node: TaskNode,
 ):
     try:
 
@@ -851,7 +852,7 @@ async def download_chat_task(
                 if downloading_messages and len(downloading_messages) > 0:
                     try:
                         for message in downloading_messages:
-                            if need_skip_message(message, chat_download_config) : # 不在下载范围内
+                            if need_skip_message(message, chat_download_config):  # 不在下载范围内
                                 node.download_status[message.id] = DownloadStatus.SkipDownload
                                 continue
                             else:
@@ -864,7 +865,6 @@ async def download_chat_task(
                         logger.exception(f"{e}")
 
                 await asyncio.sleep(RETRY_TIME_OUT)
-
 
         """Download all task"""
         messages_iter = get_chat_history_v2(
@@ -898,24 +898,26 @@ async def download_chat_task(
 
 async def download_all_chat(client: pyrogram.Client):
     """Download All chat"""
+
     logger.info(f"开始读取全部Chat...")
     for key, value in app.chat_download_config.items():
         value.node = TaskNode(chat_id=key)
         try:
-            if test_filename:
-                await download_chat_task_test(client, value, value.node)
-            else:
-                # await deal_chat_dir(key, value.node, client)
-                await download_chat_task(client, value, value.node)
+
+            await download_chat_task(client, value, value.node)
 
         except Exception as e:
             logger.warning(f"Download {key} error: {e}")
         finally:
             value.need_check = True
             logger.info(f"{_t('update config')}......")
-            if not test_filename:
-                app.update_config()
+            app.update_config()
     logger.info(f"读取全部Chat完毕...")
+    while queue.qsize() >0:
+        await asyncio.sleep(1)
+    _load_config()
+    download_all_chat(client)
+
 
 
 async def run_until_all_task_finish():
@@ -951,20 +953,19 @@ async def stop_server(client: pyrogram.Client):
     """
     await client.stop()
 
-async def rename_files():
-    pass
-
 
 def main():
     """Main function of the downloader."""
     tasks = []
+    if app.proxies:
+        proxy = random.choice(app.proxies)
     client = HookClient(
-            "media_downloader",
-            api_id=app.api_id,
-            api_hash=app.api_hash,
-            proxy=app.proxy,
-            workdir=app.session_file_path,
-            start_timeout=app.start_timeout,
+        "media_downloader",
+        api_id=app.api_id,
+        api_hash=app.api_hash,
+        proxy= proxy,
+        workdir=app.session_file_path,
+        start_timeout=app.start_timeout,
     )
     try:
         app.pre_run()
@@ -979,10 +980,6 @@ def main():
         for _ in range(app.max_download_task):
             task = app.loop.create_task(worker(client))
             tasks.append(task)
-
-        # 重命名线程 有 bug ：程序终端会漏掉待命名文件 暂不使用
-        # task_rename = app.loop.create_task(rename_worker())
-        # tasks.append(task_rename)
 
         if app.bot_token:
             app.loop.run_until_complete(
@@ -1003,7 +1000,7 @@ def main():
             app.loop.run_until_complete(stop_download_bot())
         app.loop.run_until_complete(stop_server(client))
         for task in tasks:
-                task.cancel()
+            task.cancel()
         logger.info(_t("Stopped!"))
         logger.info(f"{_t('update config')}......")
         app.update_config()
@@ -1020,4 +1017,3 @@ if __name__ == "__main__":
         logger.error("Configuration check failed. Exiting.")
     else:
         main()
-

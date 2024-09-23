@@ -472,6 +472,11 @@ async def forward_multi_media(
     if not caption:
         caption = app.get_caption_name(node.chat_id, message.media_group_id)
 
+    max_caption_length = 4096 if client.me and client.me.is_premium else 1024
+    # proc caption MEDIA_CAPTION_TOO_LONG
+    if caption and len(caption) > max_caption_length:
+        caption = caption[:max_caption_length]
+
     media_obj = get_media_obj(message, file_name, caption)
     if not file_name:
         media = getattr(message, message.media.value)
@@ -912,11 +917,6 @@ def set_meta_data(
         meta_data.media_type = 'document'
     else:
         return
-
-    mini_mime_type = getattr(media_obj, 'mime_type', None)
-    # if mini_mime_type and '/' in mini_mime_type:
-    #     print(mini_mime_type)
-
     meta_data.media_file_name = getattr(media_obj, "file_name", None) or ""
     meta_data.media_file_size = getattr(media_obj, "file_size", None)
     meta_data.media_width = getattr(media_obj, "width", None)

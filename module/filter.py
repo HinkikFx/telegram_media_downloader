@@ -9,8 +9,6 @@ from ply import lex, yacc
 from utils.format import get_byte_from_str
 from utils.meta_data import MetaData, NoneObj, ReString
 
-from loguru import logger
-
 
 # pylint: disable = R0904
 class BaseFilter:
@@ -34,10 +32,6 @@ class BaseFilter:
     def reset(self):
         """Reset all symbol"""
         self.names.clear()
-
-    def language_check(self, filter_str: str):
-        return
-
 
     def exec(self, filter_str: str) -> Any:
         """Exec filter str"""

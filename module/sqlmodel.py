@@ -316,12 +316,12 @@ class Downloaded(BaseModel):
 
 
 
-    def get_similar_files(self, msgdict, similar_min: float, sizerange_min: float, status: list = []): #返回结果均不包含自己
+    def get_similar_files(self, msgdict, similar_min: float, sizerange_min: float, status: list = None): #返回结果均不包含自己
         similar_file_list = []
         if db.autoconnect == False:
             db.connect()
         try:
-            if len(status) == 0:
+            if status is None or len(status) == 0:
                 status_acc= [1] #只找完成下载的
             else:
                 status_acc = status
@@ -339,7 +339,8 @@ class Downloaded(BaseModel):
             media_size_2 = math.floor(msgdict.get('media_size') * (1 + sizerange_min * 10))
 
             if not msgdict.get('title') or msgdict.get('title') =='':
-                return
+                # 当文件标题不存在或为空时，无法进行相似度比较 返回空列表
+                return []
 
             file_core_name = re.sub(r"[-_~～]", ' ', msgdict.get('title', ''))
 
