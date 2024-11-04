@@ -726,18 +726,6 @@ class Application:
 
         return res
 
-        # if res and res != '':
-        #     for prefix in self.file_path_prefix:
-        #         if prefix == "chat_title":
-        #             res = os.path.join(res, chat_title)
-        #         elif prefix == "media_datetime":
-        #             res = os.path.join(res, media_datetime)
-        #         elif prefix == "media_type":
-        #             res = os.path.join(res, media_type)
-        #     return res
-        # else:
-        #     return self.get_file_save_path('default', chat_title, media_datetime)
-
     def get_file_name(
         self, message_id: int, file_name: Optional[str], caption: Optional[str]
     ) -> str:
@@ -883,7 +871,7 @@ class Application:
         # for it in self.downloaded_ids:
         #    self.already_download_ids_set.add(it)
 
-        #self.app_data["already_download_ids"] = list(self.already_download_ids_set)
+        # self.app_data["already_download_ids"] = list(self.already_download_ids_set)
 
         if immediate:
             bak_config_file = f"{self.config_file}.bak"
