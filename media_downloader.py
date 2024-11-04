@@ -309,11 +309,13 @@ def _get_media_meta(
             msg_file_ext = default_ext
         msg_title = f"{msg_file_onlyname}"
         if msg_caption and msg_caption != '':  #caption 存在
+            name_from_caption = ""
             if re.search(r"作品.+?\s(.+?)\s", msg_caption):
                 name_from_caption = re.search(r"作品.+?\s(.+?)\s", msg_caption).groups()[0]
                 msg_title = f"{msg_title}({name_from_caption})"
-            else:
-                name_from_caption = ''
+            elif msg_filename == "NoName":
+                name_from_caption = msg_caption
+                msg_title = f"{name_from_caption}"
 
             if 'telegram' in msg_filename.lower() or '电报搜索' in msg_filename or '更多视频' in msg_filename or 'pandatv' in msg_filename.lower() or re.sub(
                     r'[._\-\s]', '',
@@ -332,14 +334,27 @@ def _get_media_meta(
 
         if not msg_real_chat_username or msg_real_chat_username == '':
             subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_id}")
-            subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
         else:
             subdir = validate_title(f"[{msg_real_chat_id}]{msg_real_chat_username}")
-            subdir = os.path.join(subdir, str(msg_real_message_id // 100 * 100).zfill(6))
 
-        file_save_url = os.path.join(app.get_file_save_path(msg_type, msg_real_chat_title, msg_time), subdir,
-                                     msg_filename)
-        temp_save_url = os.path.join(app.temp_save_path, subdir, msg_filename)
+        file_save_path = os.path.join(app.get_file_save_path(msg_type, msg_real_chat_title, message.date),subdir)
+        temp_save_path = os.path.join(app.temp_save_path,subdir)
+
+        if "media_datetime" in app.config.get("file_path_prefix"):
+            year_str = message.date.strftime("%Y")
+            month_str = message.date.strftime("%m")
+            file_save_path = os.path.join(file_save_path, year_str, month_str )
+            temp_save_path = os.path.join(temp_save_path, year_str, month_str )
+
+
+        if "message_id" in app.config.get("file_path_prefix"):
+            file_save_path = os.path.join(file_save_path, str(msg_real_message_id // 100 * 100).zfill(6))
+            temp_save_path = os.path.join(temp_save_path, str(msg_real_message_id // 100 * 100).zfill(6))
+
+
+        file_save_url = os.path.join(file_save_path, msg_filename)
+        temp_save_url = os.path.join(temp_save_path, msg_filename)
+
 
         if not msg_filename or 'None' in file_save_url:
             if not msg_real_chat_username:
@@ -413,19 +428,24 @@ async def add_download_task(
     msg_db_status = _get_msg_db_status(msg_dict)
 
     if msg_db_status == Msg_db_Status.DB_Exist:  # 数据库有完成
-        msg_file_status = await _get_msg_file_status(msg_dict)
-        if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
-            # 文件存在
-            node.download_status[message.id] = DownloadStatus.SuccessDownload
-            return
-        else:
-            # 文件没了
-            To_Down = True  #重新下载
+        node.download_status[message.id] = DownloadStatus.SuccessDownload
+        return
+
+        # 不再检查本地文件是否存在 相信数据库
+        # msg_file_status = await _get_msg_file_status(msg_dict)
+        # if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
+        #     # 文件存在
+        #     node.download_status[message.id] = DownloadStatus.SuccessDownload
+        #     return
+        # else:
+        #     # 文件没了
+        #     To_Down = True  #重新下载
     elif msg_db_status == Msg_db_Status.DB_Aka_Exist:  # 数据库有 标记为与其他等价
         # 文件有没有暂时不管
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
     elif msg_db_status == Msg_db_Status.DB_Downloading:  # 数据库标识为正在下载
+
         msg_file_status = await _get_msg_file_status(msg_dict)
         if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:
             # 文件存在
@@ -440,14 +460,17 @@ async def add_download_task(
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
     elif msg_db_status == Msg_db_Status.DB_No_Exist:  # 数据库没有
-        msg_file_status = await _get_msg_file_status(msg_dict)
-        if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:  # 文件有
-            node.download_status[message.id] = DownloadStatus.SuccessDownload
-            msg_dict['status'] = 1
-            db.insert_into_db(msg_dict)  # 补写入数据库
-            return
-        else:  # 文件也没
-            To_Down = True
+        To_Down = True
+
+        # 不再检查本地文件是否存在 相信数据库
+        # msg_file_status = await _get_msg_file_status(msg_dict)
+        # if msg_file_status == Msg_file_Status.File_Exist or msg_file_status == Msg_file_Status.File_Aka_Exist:  # 文件有
+        #     node.download_status[message.id] = DownloadStatus.SuccessDownload
+        #     msg_dict['status'] = 1
+        #     db.insert_into_db(msg_dict)  # 补写入数据库
+        #     return
+        # else:  # 文件也没
+        #     To_Down = True
     elif msg_db_status == Msg_db_Status.DB_Passed:  #标记为人为跳过
         node.download_status[message.id] = DownloadStatus.SkipDownload
         return
@@ -854,6 +877,10 @@ async def download_chat_task(
                         for message in downloading_messages:
                             if need_skip_message(message, chat_download_config):  # 不在下载范围内
                                 node.download_status[message.id] = DownloadStatus.SkipDownload
+                                msg = db.getMsg(node.chat_id, message.id, 2)
+                                msg.status = 5
+                                msg.save()
+                                logger.info(f"[{node.chat_id}]{msg.filename}文件已被频道删除，跳过")
                                 continue
                             else:
                                 await add_download_task(message, node)
@@ -898,25 +925,31 @@ async def download_chat_task(
 
 async def download_all_chat(client: pyrogram.Client):
     """Download All chat"""
-
+    start_time = time.time()
     logger.info(f"开始读取全部Chat...")
     for key, value in app.chat_download_config.items():
         value.node = TaskNode(chat_id=key)
         try:
-
             await download_chat_task(client, value, value.node)
-
         except Exception as e:
             logger.warning(f"Download {key} error: {e}")
         finally:
             value.need_check = True
-            logger.info(f"{_t('update config')}......")
             app.update_config()
+            logger.info(f"{_t('update config')}......")
+
     logger.info(f"读取全部Chat完毕...")
     while queue.qsize() >0:
-        await asyncio.sleep(1)
-    _load_config()
-    download_all_chat(client)
+        await asyncio.sleep(10)
+    # round_time = int(time.time() - start_time)
+    # if round_time <= 600:
+    #     logger.info(f"等待下一轮...")
+    #     for i in range(600- round_time, 0, -1):
+    #         print("\r倒计时{}秒！".format(i), end="", flush=True)
+    #         time.sleep(1)
+    #     print("\r倒计时结束！")
+    # _load_config()
+    # await download_all_chat(client)
 
 
 

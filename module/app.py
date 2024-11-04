@@ -721,19 +721,22 @@ class Application:
         try:
             res = self.save_path.get(media_type)
         except Exception as e:
+            logger.info(e)
             pass
 
-        if res and res != '':
-            for prefix in self.file_path_prefix:
-                if prefix == "chat_title":
-                    res = os.path.join(res, chat_title)
-                elif prefix == "media_datetime":
-                    res = os.path.join(res, media_datetime)
-                elif prefix == "media_type":
-                    res = os.path.join(res, media_type)
-            return res
-        else:
-            return self.get_file_save_path('default', chat_title, media_datetime)
+        return res
+
+        # if res and res != '':
+        #     for prefix in self.file_path_prefix:
+        #         if prefix == "chat_title":
+        #             res = os.path.join(res, chat_title)
+        #         elif prefix == "media_datetime":
+        #             res = os.path.join(res, media_datetime)
+        #         elif prefix == "media_type":
+        #             res = os.path.join(res, media_type)
+        #     return res
+        # else:
+        #     return self.get_file_save_path('default', chat_title, media_datetime)
 
     def get_file_name(
         self, message_id: int, file_name: Optional[str], caption: Optional[str]
@@ -916,11 +919,12 @@ class Application:
             retrys = db.load_retry_msg_from_db()
             if retrys:
                 for chat in retrys:
-                    if chat.get('chat_username') and chat.get('chat_username') !='':
+                    if  chat.get('chat_username') and chat.get('chat_username') in self.chat_download_config:
                         chat_id_aka = chat.get('chat_username')
+                    elif chat.get('chat_id') and chat.get('chat_id') in self.chat_download_config:
+                        chat_id_aka = chat.get('chat_id')
                     else:
                         chat_id_aka = chat.get('chat_id')
-                    if not chat_id_aka in self.chat_download_config:
 
                         self.chat_download_config[chat_id_aka] = ChatDownloadConfig()
                         self.chat_download_config[chat_id_aka].last_read_message_id = 9999999

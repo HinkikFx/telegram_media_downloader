@@ -5,7 +5,6 @@ from peewee import *
 from datetime import datetime
 from loguru import logger
 from utils import format
-from playhouse.shortcuts import model_to_dict
 import re
 
 source_db = os.path.join(os.path.abspath("."), "downloaded.db")
@@ -30,7 +29,7 @@ class MsgStatusDB(Enum):
     SkipDownload = 3
     MissingDownload = 4
 
-def get_similar_rate(msg_dict1, msg_dict2, sizerange_min):
+def get_similar_rate(msg_dict1, db_results, sizerange_min):
 
     if '.' in msg_dict1.get('filename'):
         filename1 = msg_dict1.get('filename').split(".")[-2]
@@ -38,14 +37,14 @@ def get_similar_rate(msg_dict1, msg_dict2, sizerange_min):
         filename1 = msg_dict1.get('filename')
     filename1 = re.sub(r"^\[\d+\]?", '', filename1).replace(' ', '')
 
-    if '.' in msg_dict2.get('filename'):
-        filename2 = msg_dict2.get('filename').split(".")[-2]
+    if '.' in db_results.filename:
+        filename2 = db_results.filename.split(".")[-2]
     else:
-        filename2 = msg_dict2.get('filename')
+        filename2 = db_results.filename
     filename2 = re.sub(r"^\[\d+\]?", '', filename2).replace(' ', '')
 
     title1 = msg_dict1.get('title').replace(' ', '')
-    title2 = msg_dict2.get('title').replace(' ', '')
+    title2 = db_results.title.replace(' ', '')
 
     similar = 0
 
@@ -77,18 +76,17 @@ def get_similar_rate(msg_dict1, msg_dict2, sizerange_min):
             namea1 = format.process_string(namea).replace(' ', '')
             nameb1 = format.process_string(nameb).replace(' ', '')
             if namea1 != '' and nameb1 != '' and (namea1 in nameb1 or nameb1 in namea1) and msg_dict1.get(
-                    'mime_type') == msg_dict2.get(
-                'mime_type') and msg_dict1.get('media_size') > 0 and math.isclose(
+                    'mime_type') == db_results.mime_type and msg_dict1.get('media_size') > 0 and math.isclose(
                 msg_dict1.get('media_size'),
-                msg_dict2.get('media_size'),
+                db_results.media_size,
                 rel_tol=sizerange_min) and msg_dict1.get('media_duration') > 0 and math.isclose(
-                msg_dict1.get('media_duration'), msg_dict2.get('media_duration'),
+                msg_dict1.get('media_duration'), db_results.media_duration,
                 rel_tol=sizerange_min):  # 文件名是包含关系 且大小时长都很相似
                 sim_num = sim_num * 1.25
 
             # 补充情况2 文件大小完全一致 文件类型完全一致 文件名相似度可以打8折即 扩张为125%
-            elif msg_dict1.get('mime_type') == msg_dict2.get('mime_type') and msg_dict1.get(
-                    'media_size') > 0 and msg_dict1.get('media_size') == msg_dict2.get('media_size'):
+            elif msg_dict1.get('mime_type') == db_results.mime_type and msg_dict1.get(
+                    'media_size') > 0 and msg_dict1.get('media_size') == db_results.media_size:
                 sim_num = sim_num * 1.25
 
             if similar < sim_num:
@@ -119,23 +117,23 @@ class Downloaded(BaseModel):
     class Meta:
         table_name = 'Downloaded'
 
-    def getMsg(self, chat_username: str, message_id: int, status = 1, chat_id: int =None):
+    def getMsg(self, chat_id: str, message_id: int, status = 1):
         if db.autoconnect == False:
             db.connect()
-        if chat_username:
+        try:
+            downloaded = Downloaded.get(Downloaded.chat_id == chat_id,
+                                        Downloaded.message_id == message_id, Downloaded.status == status)
+            if downloaded:
+                return downloaded  # 说明存在此条数据
+        except DoesNotExist:
             try:
-                downloaded = Downloaded.get(Downloaded.chat_username==chat_username, Downloaded.message_id==message_id, Downloaded.status == status)
+                downloaded = Downloaded.get(Downloaded.chat_username == chat_id, Downloaded.message_id == message_id,
+                                            Downloaded.status == status)
                 if downloaded:
                     return downloaded  # 说明存在此条数据
             except DoesNotExist:
                 return None
-        elif chat_id:
-            try:
-                downloaded = Downloaded.get(Downloaded.chat_id==chat_id, Downloaded.message_id==message_id, Downloaded.status == status)
-                if downloaded:
-                    return downloaded  # 说明存在此条数据
-            except DoesNotExist:
-                return None
+            return None
         return None # 0为不存在
 
     def get2Down(self, chat_username: str):
@@ -361,8 +359,8 @@ class Downloaded(BaseModel):
                 downloaded = result1.union(result2).union(result3)
             else:
                 downloaded = result1
-            # if len(downloaded) > 20:
-            #     print(f'debug：{file_core_name}')
+            if len(downloaded) > 20:
+                return []
             for record in downloaded:
                 if record.chat_id == msgdict.get('chat_id') and record.message_id == msgdict.get('message_id'): # 是自己
                     # if record.status == 1:  # 如果是已完成状态 直接加入列表
@@ -371,7 +369,7 @@ class Downloaded(BaseModel):
                     #     continue # 如果是未完成状态 则跳过
                     continue
                 else: # 不是自己 判断文件名是否接近
-                    similar = get_similar_rate(msgdict, model_to_dict(record), sizerange_min)
+                    similar = get_similar_rate(msgdict, record, sizerange_min)
                     if similar >= similar_min: # 名字高于相似度阈值
                         similar_file_list.append(record)
                         continue

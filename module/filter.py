@@ -350,10 +350,41 @@ class Filter:
         self.filter.reset()
         self.filter.names = meta_data.data()
 
+
+
     def has_japanese_or_korean_chars(self, a: str) -> bool:
-        # Match any character in the Unicode block for Japanese or Korean characters
-        result = bool(re.search(r'[\u3040-\u30ff\uac00-\ud7a3]', a.replace('の', '的')) or re.search(r'(日南|真琴|天知遥|秋水|养猪妹|利香|幽灵妹|柚木)', a))
-        return result
+        try:
+            if not isinstance(a, str):
+                raise ValueError("Input must be a string")
+
+            if not a:
+                return False
+
+            # Replace 'の' with '的'
+            a = a.replace('の', '的')
+
+            # Define the patterns
+            japanese_pattern = r'[\u3040-\u30ff]'
+            korean_pattern = r'[\uac00-\ud7a3]'
+            specific_names_pattern = r'(日南|真琴|天知遥|秋水|养猪妹|利香|幽灵妹|柚木)'
+
+            waste_patterns = [
+                r' 音音', r'惠子', r'梦冬', r'汀宝', r'筱安安', r'KU100', r'芝恩', r'轻语的神',
+                r'阿花yoyo', r'耳边私语', r'阿茉', r'夏姗姗', r'芦荟胶', r'maltsugar', r'桥桥',
+                r'被窝限定', r'柴胡', r'大战僵尸', r'鹿之之', r'织织宝', r'3D', r'录播', r'疗愈',
+                r'陈安安', r'oTo', r'岁岁',
+            ]
+
+            # Combine the patterns
+            combined_pattern = f'({japanese_pattern}|{korean_pattern}|{specific_names_pattern}|{waste_patterns})'
+
+            # Search for the combined pattern
+            result = bool(re.search(combined_pattern, a))
+            return result
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return False
+
 
 
     def set_debug(self, debug: bool):

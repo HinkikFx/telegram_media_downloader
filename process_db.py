@@ -10,7 +10,6 @@ from pathlib import Path
 from time import sleep
 from tqdm import tqdm
 from module import sqlmodel
-from playhouse.shortcuts import model_to_dict, dict_to_model
 from utils.format import validate_title, guess_media_type, move_file, process_string
 import concurrent.futures
 import subprocess

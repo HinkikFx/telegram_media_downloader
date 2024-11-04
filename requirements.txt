@@ -9,13 +9,14 @@ ply==3.11
 ruamel.yaml==0.17.21
 flask-login==0.6.2
 pycryptodome==3.18.0
-moviepy==1.0.3
+moviepy
 pyrogram
-peewee
+peewee == 3.15.3
 zhon
 filesplit
 tqdm
 apscheduler
 python-ffmpeg
-opencv-python
+opencc-python-reimplemented
 requests==2.32.3
+regex
