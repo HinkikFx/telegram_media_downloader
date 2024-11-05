@@ -206,10 +206,6 @@ allowed_user_ids:
 - me
 - '@Mouxwu'
 - '@bwuyun'
-proxies:
-- hostname: 127.0.0.1
-  port: 7897
-  scheme: socks5
 language: ZH
 date_format: '%Y-%m'
 web_host: 0.0.0.0
