@@ -452,6 +452,7 @@ class Application:
             self.save_path = _config["save_path"]
 
         self.api_id = _config["api_id"]
+        self.session_file_path = os.path.join(os.path.abspath("."), "sessions", str(self.api_id))
         self.api_hash = _config["api_hash"]
         self.bot_token = _config.get("bot_token", "")
 
@@ -939,7 +940,6 @@ class Application:
     def pre_run(self):
         """before run application do"""
         self.cloud_drive_config.pre_run()
-        self.session_file_path = os.path.join(self.session_file_path, str(self.api_id))
         if not os.path.exists(self.session_file_path):
             os.makedirs(self.session_file_path)
         set_language(self.language)

@@ -5,6 +5,7 @@ import shutil
 import time
 import re
 from enum import Enum
+from typing import List, Optional, Tuple, Union
 import pyrogram
 from loguru import logger
 import random
@@ -853,7 +854,7 @@ async def download_chat_task(
     try:
 
         if str(node.chat_id).isdigit():
-            real_chat_id = str(0 - node.chat_id - 1000000000000)
+            real_chat_id = 0 - node.chat_id - 1000000000000
         else:
             real_chat_id = node.chat_id
 
@@ -908,7 +909,12 @@ async def download_chat_task(
         message_line = tqdm(messages_iter)
 
         async for message in message_line:  # type: ignore
-            message_line.set_description("[%s]" % node.chat_id)
+
+            if message.chat.username:
+                message_line.set_description("[%s]" % f"{message.chat.username}][{node.chat_id}")
+            else:
+                message_line.set_description("[%s]" % f"{node.chat_id}")
+
 
             if need_skip_message(message, chat_download_config):  # 不在下载范围内
                 node.download_status[message.id] = DownloadStatus.SkipDownload
