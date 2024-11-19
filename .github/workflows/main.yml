@@ -11,23 +11,17 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-
+    runs-on: windows-latest
+  
     steps:
       - uses: actions/checkout@v4.1.1
 
       - name: Install UPX
         uses: crazy-max/ghaction-upx@v3.0.0
-        if: matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest'
         with:
           install-only: true
 
       - name: UPX version
-        if: matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest'
         run: upx --version
 
       - name: Setup Python 3.12
@@ -43,7 +37,6 @@ jobs:
 
 
       - name: Build with PyInstaller for windows
-        if: matrix.os == 'windows-latest'
         run: |
           pyinstaller `
             --onefile media_downloader.py `
@@ -60,6 +53,6 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4.0.0
         with:
-          name: TMD-${{ env.VERSION }}-${{ runner.os }}-amd64
+          name: meow-amd64
           path: dist
 
