@@ -14,20 +14,20 @@ jobs:
     runs-on: windows-latest
   
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4.2.2
 
       - name: Install UPX
-        uses: crazy-max/ghaction-upx@v3.0.0
+        uses: crazy-max/ghaction-upx@v3.1.0
         with:
           install-only: true
 
       - name: UPX version
         run: upx --version
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5.0.0
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5.3.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
@@ -51,7 +51,7 @@ jobs:
 
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: meow-amd64
           path: dist
